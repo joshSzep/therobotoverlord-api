@@ -112,8 +112,8 @@ class TestBaseDBModel:
     def test_model_config(self):
         """Test BaseDBModel configuration."""
         config = BaseDBModel.model_config
-        assert config["from_attributes"] is True
-        assert config["use_enum_values"] is True
+        assert config.get("from_attributes") is True
+        assert config.get("use_enum_values") is True
 
     def test_model_validation_with_dict(self):
         """Test model validation from dictionary."""
@@ -188,7 +188,7 @@ class TestTimestampMixin:
     def test_mixin_config(self):
         """Test TimestampMixin configuration."""
         config = TimestampMixin.model_config
-        assert config["from_attributes"] is True
+        assert config.get("from_attributes") is True
 
     def test_mixin_validation_with_dict(self):
         """Test mixin validation from dictionary."""

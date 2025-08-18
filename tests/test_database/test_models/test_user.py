@@ -268,7 +268,7 @@ class TestUserLeaderboard:
     def test_user_leaderboard_config(self):
         """Test UserLeaderboard configuration."""
         config = UserLeaderboard.model_config
-        assert config["from_attributes"] is True
+        assert config.get("from_attributes") is True
 
 
 class TestUserProfile:
@@ -312,7 +312,7 @@ class TestUserProfile:
     def test_user_profile_config(self):
         """Test UserProfile configuration."""
         config = UserProfile.model_config
-        assert config["from_attributes"] is True
+        assert config.get("from_attributes") is True
 
     def test_user_profile_validation_from_dict(self):
         """Test UserProfile validation from dictionary."""
