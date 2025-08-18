@@ -3,7 +3,7 @@ name = "therobotoverlord-api"
 version = "0.1.0"
 description = "The Robot Overlord API"
 authors = [
-    { name = "Joshua Szepietowski", email = "joshSzep@gmail.com" }
+    { name = "Joshua Szepietowski", email = "joshSzep@gmail.com" },
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -53,15 +53,58 @@ dev = [
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D", "ANN", "COM812", "ISC001", "S608", "TRY003", "G004", "EM101", "TRY400", "BLE001", "TRY300", "SIM117", "EM102", "S101", "PLR2004", "E501", "SLF001", "F841", "S106", "C901", "B023", "ARG001", "SIM118", "FBT003", "S105", "ARG002"]
+ignore = [
+    "D",
+    "ANN",
+    "COM812",
+    "ISC001",
+    "S608",
+    "TRY003",
+    "G004",
+    "EM101",
+    "TRY400",
+    "BLE001",
+    "TRY300",
+    "SIM117",
+    "EM102",
+    "S101",
+    "PLR2004",
+    "E501",
+    "SLF001",
+    "F841",
+    "S106",
+    "C901",
+    "B023",
+    "ARG001",
+    "SIM118",
+    "FBT003",
+    "S104",
+    "S105",
+    "ARG002",
+    "UP043",
+    "TRY301",
+]
 
 [tool.ruff.lint.isort]
 single-line-exclusions = []
 force-single-line = true
-known-first-party = ["therobotoverlord_api"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+known-first-party = [
+    "therobotoverlord_api",
+]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
 lines-between-types = 1
 
 [tool.bandit]
-exclude_dirs = ["tests"]
-skips = ["B608"]
+exclude_dirs = [
+    "tests",
+]
+skips = [
+    "B608",
+    "S101",
+]

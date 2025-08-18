@@ -1,63 +1,39 @@
 # The Robot Overlord API
 
-FastAPI backend for The Robot Overlord debate platform.
+A satirical AI-moderated debate platform API built with FastAPI and PostgreSQL.
 
-## Database Setup
+## Features
+
+- **Google OAuth Authentication** - Secure user authentication with JWT tokens
+- **Role-based Access Control** - Citizen, Moderator, Admin, Super Admin roles
+- **Session Management** - Refresh token rotation with reuse detection
+- **User Management** - Profile creation, loyalty scoring, leaderboards
+- Topic creation and management (planned)
+- Post submission and moderation (planned)
+- Real-time queue visualization (planned)
+- Private messaging (planned)
+- Appeals and reporting system (planned)
+
+## Tech Stack
+
+- **Framework**: FastAPI
+- **Database**: PostgreSQL 17 with asyncpg
+- **Authentication**: Google OAuth 2.0 + JWT
+- **Session Storage**: PostgreSQL (user_sessions table)
+- **Queue System**: PostgreSQL-based queues
+- **AI Integration**: Planned (OpenAI GPT for Overlord moderation)
+
+## Development Setup
 
 ### Prerequisites
 
-- Docker and Docker Compose
 - Python 3.13+
-- PostgreSQL client tools (optional, for direct database access)
+- PostgreSQL 17+
+- Google OAuth 2.0 credentials
 
-### Quick Start
+### Installation
 
-1. **Start the database services:**
-   ```bash
-   docker-compose up -d
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   uv sync --dev
-   ```
-
-3. **Run database migrations:**
-   ```bash
-   # Set environment variable for local development
-   export DATABASE_URL="postgresql://postgres:password@localhost:5432/therobotoverlord"
-
-   # Run migrations
-   cd migrations
-   yoyo apply --database $DATABASE_URL
-   ```
-
-4. **Verify database setup:**
-   ```python
-   # Test the database connection
-   python -c "
-   import asyncio
-   from src.therobotoverlord_api.database.health import health_checker
-
-   async def test():
-       result = await health_checker.full_health_check()
-       print(result)
-
-   asyncio.run(test())
-   "
-   ```
-
-### Database Configuration
-
-The database can be configured via environment variables:
-
-- `DATABASE_URL` - Full PostgreSQL connection string
-- `DATABASE_MIN_POOL_SIZE` - Minimum connection pool size (default: 5)
-- `DATABASE_MAX_POOL_SIZE` - Maximum connection pool size (default: 20)
-- `DATABASE_POOL_TIMEOUT` - Connection pool timeout in seconds (default: 30)
-
-### Migration Management
-
+1. Clone the repository:
 Migrations are managed using `yoyo-migrations`:
 
 ```bash
