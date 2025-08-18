@@ -70,6 +70,25 @@ class PostRepository(BaseRepository[Post]):
             records = await connection.fetch(query, *params)
             return [PostWithAuthor.model_validate(record) for record in records]
 
+    async def get_graveyard_posts(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[PostWithAuthor]:
+        """Get rejected posts (graveyard)."""
+        query = """
+            SELECT
+                p.*,
+                u.username as author_username
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            WHERE p.status = 'rejected'
+            ORDER BY p.updated_at DESC
+            LIMIT $1 OFFSET $2
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit, offset)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
     async def get_approved_by_topic(
         self, topic_pk: UUID, limit: int = 100, offset: int = 0
     ) -> list[PostWithAuthor]:
@@ -298,4 +317,23 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
+    async def get_graveyard_posts(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[PostWithAuthor]:
+        """Get rejected posts (graveyard)."""
+        query = """
+            SELECT
+                p.*,
+                u.username as author_username
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            WHERE p.status = 'rejected'
+            ORDER BY p.updated_at DESC
+            LIMIT $1 OFFSET $2
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit, offset)
             return [PostWithAuthor.model_validate(record) for record in records]

@@ -56,6 +56,10 @@ class TopicCreationQueueRepository(BaseRepository[TopicCreationQueue]):
             record = await connection.fetchrow(query)
             return self._record_to_model(record) if record else None
 
+    async def get_next_pending_item(self) -> TopicCreationQueue | None:
+        """Get the next pending item in the queue (alias for get_next_pending)."""
+        return await self.get_next_pending()
+
     async def assign_to_worker(
         self, pk: UUID, worker_id: str
     ) -> TopicCreationQueue | None:
@@ -141,6 +145,12 @@ class PostModerationQueueRepository(BaseRepository[PostModerationQueue]):
         async with get_db_connection() as connection:
             record = await connection.fetchrow(query, topic_pk)
             return self._record_to_model(record) if record else None
+
+    async def get_next_pending_item_by_topic(
+        self, topic_pk: UUID
+    ) -> PostModerationQueue | None:
+        """Get the next pending item in topic-specific queue (alias)."""
+        return await self.get_next_pending_by_topic(topic_pk)
 
     async def get_next_pending_global(self) -> PostModerationQueue | None:
         """Get the next pending item across all topics."""
@@ -252,6 +262,12 @@ class PrivateMessageQueueRepository(BaseRepository[PrivateMessageQueue]):
         async with get_db_connection() as connection:
             record = await connection.fetchrow(query, conversation_id)
             return self._record_to_model(record) if record else None
+
+    async def get_next_pending_item_by_conversation(
+        self, conversation_id: str
+    ) -> PrivateMessageQueue | None:
+        """Get the next pending item in conversation-specific queue (alias)."""
+        return await self.get_next_pending_by_conversation(conversation_id)
 
     async def assign_to_worker(
         self, pk: UUID, worker_id: str
@@ -388,3 +404,127 @@ class QueueOverviewRepository:
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
             return [QueueWithContent.model_validate(record) for record in records]
+
+    async def get_queue_with_content(
+        self, queue_type: str | None = None, limit: int = 100, offset: int = 0
+    ) -> list[QueueWithContent]:
+        """Get queue items with content information."""
+        base_query = """
+            SELECT
+                'topic_creation' as queue_type,
+                tcq.pk,
+                tcq.topic_pk as content_pk,
+                t.title as content_title,
+                SUBSTRING(t.description, 1, 100) as content_preview,
+                tcq.priority_score,
+                tcq.status,
+                tcq.position_in_queue,
+                tcq.entered_queue_at,
+                u.username as author_username
+            FROM topic_creation_queue tcq
+            JOIN topics t ON tcq.topic_pk = t.pk
+            JOIN users u ON t.author_pk = u.pk
+            WHERE tcq.status != 'completed'
+        """
+        
+        if queue_type == "topic_creation":
+            query = f"{base_query} ORDER BY tcq.priority_score ASC, tcq.entered_queue_at ASC LIMIT ${1} OFFSET ${2}"
+            params = [limit, offset]
+        elif queue_type == "post_moderation":
+            query = """
+                SELECT
+                    'post_moderation' as queue_type,
+                    pmq.pk,
+                    pmq.post_pk as content_pk,
+                    CONCAT('Re: ', t.title) as content_title,
+                    SUBSTRING(p.content, 1, 100) as content_preview,
+                    pmq.priority_score,
+                    pmq.status,
+                    pmq.position_in_queue,
+                    pmq.entered_queue_at,
+                    u.username as author_username
+                FROM post_moderation_queue pmq
+                JOIN posts p ON pmq.post_pk = p.pk
+                JOIN topics t ON p.topic_pk = t.pk
+                JOIN users u ON p.author_pk = u.pk
+                WHERE pmq.status != 'completed'
+                ORDER BY pmq.priority_score ASC, pmq.entered_queue_at ASC
+                LIMIT $1 OFFSET $2
+            """
+            params = [limit, offset]
+        else:
+            # Get all queue types
+            query = f"""
+                {base_query}
+                
+                UNION ALL
+                
+                SELECT
+                    'post_moderation' as queue_type,
+                    pmq.pk,
+                    pmq.post_pk as content_pk,
+                    CONCAT('Re: ', t.title) as content_title,
+                    SUBSTRING(p.content, 1, 100) as content_preview,
+                    pmq.priority_score,
+                    pmq.status,
+                    pmq.position_in_queue,
+                    pmq.entered_queue_at,
+                    u.username as author_username
+                FROM post_moderation_queue pmq
+                JOIN posts p ON pmq.post_pk = p.pk
+                JOIN topics t ON p.topic_pk = t.pk
+                JOIN users u ON p.author_pk = u.pk
+                WHERE pmq.status != 'completed'
+                
+                ORDER BY priority_score ASC, entered_queue_at ASC
+                LIMIT ${1} OFFSET ${2}
+            """
+            params = [limit, offset]
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, *params)
+            return [QueueWithContent.model_validate(record) for record in records]
+
+    async def get_queue_status_info(self, queue_type: str) -> dict:
+        """Get status information for a specific queue type."""
+        if queue_type == "topic_creation":
+            query = """
+                SELECT
+                    'topic_creation' as queue_type,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as total_pending,
+                    COUNT(CASE WHEN status = 'processing' THEN 1 END) as total_processing,
+                    COALESCE(AVG(EXTRACT(EPOCH FROM (NOW() - entered_queue_at)) / 60), 0) as average_wait_time_minutes,
+                    COALESCE(MAX(EXTRACT(EPOCH FROM (NOW() - entered_queue_at)) / 60), 0) as oldest_pending_minutes
+                FROM topic_creation_queue
+                WHERE status IN ('pending', 'processing')
+            """
+        elif queue_type == "post_moderation":
+            query = """
+                SELECT
+                    'post_moderation' as queue_type,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as total_pending,
+                    COUNT(CASE WHEN status = 'processing' THEN 1 END) as total_processing,
+                    COALESCE(AVG(EXTRACT(EPOCH FROM (NOW() - entered_queue_at)) / 60), 0) as average_wait_time_minutes,
+                    COALESCE(MAX(EXTRACT(EPOCH FROM (NOW() - entered_queue_at)) / 60), 0) as oldest_pending_minutes
+                FROM post_moderation_queue
+                WHERE status IN ('pending', 'processing')
+            """
+        else:
+            # Default empty status
+            return {
+                "queue_type": queue_type,
+                "total_pending": 0,
+                "total_processing": 0,
+                "average_wait_time_minutes": 0,
+                "oldest_pending_minutes": 0,
+            }
+
+        async with get_db_connection() as connection:
+            record = await connection.fetchrow(query)
+            return dict(record) if record else {
+                "queue_type": queue_type,
+                "total_pending": 0,
+                "total_processing": 0,
+                "average_wait_time_minutes": 0,
+                "oldest_pending_minutes": 0,
+            }
