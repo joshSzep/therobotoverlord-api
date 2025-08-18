@@ -22,6 +22,7 @@ dependencies = [
     "redis",
     "uvicorn[standard]",
     "websockets",
+    "yoyo-migrations",
 ]
 
 [project.scripts]
@@ -45,7 +46,6 @@ dev = [
     "pytest-mock",
     "pytest-postgresql",
     "ruff",
-    "safety",
     "testcontainers",
     "ty",
 ]

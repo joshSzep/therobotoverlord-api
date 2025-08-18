@@ -1,0 +1,77 @@
+# Pre-commit configuration for therobotoverlord-api
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  # Generic built-in pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Local repository tools
+  - repo: local
+    hooks:
+      # Ruff formatter
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      # Ruff linter
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types_or: [python, pyi]
+        args: [--fix]
+
+      # ty type checker (experimental)
+      - id: ty
+        name: ty
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # mypy type checker
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        args: [--ignore-missing-imports, --show-error-codes]
+
+      # pyright type checker
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+
+      # bandit security scanner
+      - id: bandit
+        name: bandit
+        entry: uv run bandit
+        language: system
+        types: [python]
+        args: [-r, src/, -f, json]
+        exclude: ^tests/
+        pass_filenames: false
+
+      # pytest testing
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        args: [-v, --tb=short]
