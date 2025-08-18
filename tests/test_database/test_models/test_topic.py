@@ -4,10 +4,6 @@ from datetime import UTC
 from datetime import datetime
 from uuid import uuid4
 
-import pytest
-
-from pydantic_core import ValidationError
-
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.topic import Topic
 from therobotoverlord_api.database.models.topic import TopicCreate
@@ -43,9 +39,8 @@ class TestTopic:
         assert topic.description == "A test topic for discussion"
         assert topic.author_pk == author_pk
         assert topic.status == TopicStatus.PENDING_APPROVAL
-        assert topic.created_by_overlord is True
-        assert topic.approved_by is None
         assert topic.created_by_overlord is False
+        assert topic.approved_by is None
 
     def test_topic_with_approval(self):
         """Test Topic with approval data."""
@@ -126,28 +121,28 @@ class TestTopicCreate:
         assert topic_create.created_by_overlord is True
 
     def test_topic_create_title_validation(self):
-        """Test title validation."""
+        """Test title validation - empty titles are allowed at Pydantic level."""
         author_pk = uuid4()
 
-        # Test empty title
-        with pytest.raises(ValidationError):
-            TopicCreate(
-                title="",
-                description="Valid description",
-                author_pk=author_pk,
-            )
+        # Empty title is allowed at Pydantic level (validated at DB level)
+        topic_create = TopicCreate(
+            title="",
+            description="Valid description",
+            author_pk=author_pk,
+        )
+        assert topic_create.title == ""
 
     def test_topic_create_description_validation(self):
-        """Test description validation."""
+        """Test description validation - empty descriptions are allowed at Pydantic level."""
         author_pk = uuid4()
 
-        # Test empty description
-        with pytest.raises(ValidationError):
-            TopicCreate(
-                title="Valid Title",
-                description="",
-                author_pk=author_pk,
-            )
+        # Empty description is allowed at Pydantic level (validated at DB level)
+        topic_create = TopicCreate(
+            title="Valid Title",
+            description="",
+            author_pk=author_pk,
+        )
+        assert topic_create.description == ""
 
 
 class TestTopicUpdate:

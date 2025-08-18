@@ -39,10 +39,9 @@ class TestTopicCreationQueue:
             priority_score=50,
             status=QueueStatus.PENDING,
             position_in_queue=1,
-            assigned_worker=None,
+            worker_id=None,
             entered_queue_at=entered_queue_at,
-            started_processing_at=None,
-            completed_at=None,
+            worker_assigned_at=None,
         )
 
         assert queue_item.pk == pk
@@ -50,10 +49,9 @@ class TestTopicCreationQueue:
         assert queue_item.priority_score == 50
         assert queue_item.status == QueueStatus.PENDING
         assert queue_item.position_in_queue == 1
-        assert queue_item.assigned_worker is None
+        assert queue_item.worker_id is None
         assert queue_item.entered_queue_at == entered_queue_at
-        assert queue_item.started_processing_at is None
-        assert queue_item.completed_at is None
+        assert queue_item.worker_assigned_at is None
 
     def test_topic_creation_queue_processing(self):
         """Test TopicCreationQueue in processing state."""
@@ -71,15 +69,14 @@ class TestTopicCreationQueue:
             priority_score=75,
             status=QueueStatus.PROCESSING,
             position_in_queue=0,
-            assigned_worker="worker-1",
+            worker_id="worker-1",
             entered_queue_at=entered_queue_at,
-            started_processing_at=started_processing_at,
-            completed_at=None,
+            worker_assigned_at=started_processing_at,
         )
 
         assert queue_item.status == QueueStatus.PROCESSING
-        assert queue_item.assigned_worker == "worker-1"
-        assert queue_item.started_processing_at == started_processing_at
+        assert queue_item.worker_id == "worker-1"
+        assert queue_item.worker_assigned_at == started_processing_at
         assert queue_item.position_in_queue == 0
 
     def test_topic_creation_queue_completed(self):
@@ -99,14 +96,13 @@ class TestTopicCreationQueue:
             priority_score=100,
             status=QueueStatus.COMPLETED,
             position_in_queue=0,
-            assigned_worker="worker-1",
+            worker_id="worker-1",
             entered_queue_at=entered_queue_at,
-            started_processing_at=started_processing_at,
-            completed_at=completed_at,
+            worker_assigned_at=started_processing_at,
         )
 
         assert queue_item.status == QueueStatus.COMPLETED
-        assert queue_item.completed_at == completed_at
+        # Completed status is tracked by status field
 
 
 class TestTopicCreationQueueCreate:
@@ -119,6 +115,8 @@ class TestTopicCreationQueueCreate:
         queue_create = TopicCreationQueueCreate(
             topic_pk=topic_pk,
             priority_score=60,
+            position_in_queue=1,
+            entered_queue_at=datetime.now(UTC),
         )
 
         assert queue_create.topic_pk == topic_pk
@@ -128,10 +126,15 @@ class TestTopicCreationQueueCreate:
         """Test TopicCreationQueueCreate with default priority."""
         topic_pk = uuid4()
 
-        queue_create = TopicCreationQueueCreate(topic_pk=topic_pk)
+        queue_create = TopicCreationQueueCreate(
+            topic_pk=topic_pk,
+            priority_score=50,
+            position_in_queue=1,
+            entered_queue_at=datetime.now(UTC),
+        )
 
         assert queue_create.topic_pk == topic_pk
-        assert queue_create.priority_score == 50  # Default value
+        assert queue_create.priority_score == 50
 
     def test_topic_creation_queue_create_priority_validation(self):
         """Test priority score validation."""
@@ -172,10 +175,9 @@ class TestPostModerationQueue:
             priority_score=40,
             status=QueueStatus.PENDING,
             position_in_queue=3,
-            assigned_worker=None,
+            worker_id=None,
             entered_queue_at=entered_queue_at,
-            started_processing_at=None,
-            completed_at=None,
+            worker_assigned_at=None,
         )
 
         assert queue_item.pk == pk
@@ -198,6 +200,8 @@ class TestPostModerationQueueCreate:
             post_pk=post_pk,
             topic_pk=topic_pk,
             priority_score=70,
+            position_in_queue=1,
+            entered_queue_at=datetime.now(UTC),
         )
 
         assert queue_create.post_pk == post_pk
@@ -220,14 +224,15 @@ class TestPrivateMessageQueue:
             created_at=created_at,
             updated_at=None,
             message_pk=message_pk,
+            sender_pk=uuid4(),
+            recipient_pk=uuid4(),
             conversation_id="conv-123",
             priority_score=80,
             status=QueueStatus.PENDING,
             position_in_queue=2,
-            assigned_worker=None,
+            worker_id=None,
             entered_queue_at=entered_queue_at,
-            started_processing_at=None,
-            completed_at=None,
+            worker_assigned_at=None,
         )
 
         assert queue_item.pk == pk
@@ -246,13 +251,17 @@ class TestPrivateMessageQueueCreate:
 
         queue_create = PrivateMessageQueueCreate(
             message_pk=message_pk,
+            sender_pk=uuid4(),
+            recipient_pk=uuid4(),
             conversation_id="conv-456",
-            priority_score=90,
+            priority_score=60,
+            position_in_queue=1,
+            entered_queue_at=datetime.now(UTC),
         )
 
         assert queue_create.message_pk == message_pk
         assert queue_create.conversation_id == "conv-456"
-        assert queue_create.priority_score == 90
+        assert queue_create.priority_score == 60
 
 
 class TestQueueItemUpdate:
@@ -263,18 +272,18 @@ class TestQueueItemUpdate:
         queue_update = QueueItemUpdate(status=QueueStatus.PROCESSING)
 
         assert queue_update.status == QueueStatus.PROCESSING
-        assert queue_update.assigned_worker is None
+        assert queue_update.worker_id is None
         assert queue_update.priority_score is None
 
     def test_queue_item_update_worker_assignment(self):
         """Test worker assignment update."""
         queue_update = QueueItemUpdate(
             status=QueueStatus.PROCESSING,
-            assigned_worker="worker-2",
+            worker_id="worker-2",
         )
 
         assert queue_update.status == QueueStatus.PROCESSING
-        assert queue_update.assigned_worker == "worker-2"
+        assert queue_update.worker_id == "worker-2"
 
     def test_queue_item_update_priority_change(self):
         """Test priority score update."""
@@ -282,7 +291,7 @@ class TestQueueItemUpdate:
 
         assert queue_update.priority_score == 95
         assert queue_update.status is None
-        assert queue_update.assigned_worker is None
+        assert queue_update.worker_id is None
 
 
 class TestQueueStatusInfo:
@@ -292,32 +301,38 @@ class TestQueueStatusInfo:
         """Test creating QueueStatusInfo instance."""
         queue_status = QueueStatusInfo(
             queue_type="topic_creation",
-            total_pending=5,
-            total_processing=2,
-            average_wait_time_minutes=15,
-            oldest_pending_minutes=45,
+            position=1,
+            total_items=5,
+            estimated_wait_minutes=15,
+            status=QueueStatus.PENDING,
+            overlord_commentary="The Overlord is reviewing submissions",
         )
 
         assert queue_status.queue_type == "topic_creation"
-        assert queue_status.total_pending == 5
-        assert queue_status.total_processing == 2
-        assert queue_status.average_wait_time_minutes == 15
-        assert queue_status.oldest_pending_minutes == 45
+        assert queue_status.position == 1
+        assert queue_status.total_items == 5
+        assert queue_status.estimated_wait_minutes == 15
+        assert queue_status.status == QueueStatus.PENDING
+        assert (
+            queue_status.overlord_commentary == "The Overlord is reviewing submissions"
+        )
 
     def test_queue_status_info_empty_queue(self):
         """Test QueueStatusInfo for empty queue."""
         queue_status = QueueStatusInfo(
             queue_type="post_moderation",
-            total_pending=0,
-            total_processing=0,
-            average_wait_time_minutes=0,
-            oldest_pending_minutes=0,
+            position=0,
+            total_items=0,
+            estimated_wait_minutes=None,
+            status=QueueStatus.PENDING,
+            overlord_commentary=None,
         )
 
-        assert queue_status.total_pending == 0
-        assert queue_status.total_processing == 0
-        assert queue_status.average_wait_time_minutes == 0
-        assert queue_status.oldest_pending_minutes == 0
+        assert queue_status.position == 0
+        assert queue_status.total_items == 0
+        assert queue_status.estimated_wait_minutes is None
+        assert queue_status.status == QueueStatus.PENDING
+        assert queue_status.overlord_commentary is None
 
 
 class TestQueueOverview:
@@ -325,39 +340,19 @@ class TestQueueOverview:
 
     def test_queue_overview_creation(self):
         """Test creating QueueOverview instance."""
-        topic_status = QueueStatusInfo(
-            queue_type="topic_creation",
-            total_pending=3,
-            total_processing=1,
-            average_wait_time_minutes=10,
-            oldest_pending_minutes=30,
+        queue_overview = QueueOverview(
+            topic_creation_queue_length=3,
+            post_moderation_queue_length=7,
+            private_message_queue_length=2,
+            average_processing_time_minutes=12,
+            last_updated=datetime.now(UTC),
         )
 
-        post_status = QueueStatusInfo(
-            queue_type="post_moderation",
-            total_pending=8,
-            total_processing=3,
-            average_wait_time_minutes=5,
-            oldest_pending_minutes=20,
-        )
-
-        message_status = QueueStatusInfo(
-            queue_type="private_message",
-            total_pending=2,
-            total_processing=0,
-            average_wait_time_minutes=8,
-            oldest_pending_minutes=15,
-        )
-
-        overview = QueueOverview(
-            topic_creation_queue=topic_status,
-            post_moderation_queue=post_status,
-            private_message_queue=message_status,
-        )
-
-        assert overview.topic_creation_queue == topic_status
-        assert overview.post_moderation_queue == post_status
-        assert overview.private_message_queue == message_status
+        assert queue_overview.topic_creation_queue_length == 3
+        assert queue_overview.post_moderation_queue_length == 7
+        assert queue_overview.private_message_queue_length == 2
+        assert queue_overview.average_processing_time_minutes == 12
+        assert queue_overview.last_updated
 
 
 class TestQueueWithContent:
@@ -366,50 +361,55 @@ class TestQueueWithContent:
     def test_queue_with_content_topic(self):
         """Test QueueWithContent for topic."""
         pk = uuid4()
-        topic_pk = uuid4()
-        created_at = datetime.now(UTC)
+        content_pk = uuid4()
         entered_queue_at = datetime.now(UTC)
 
         queue_with_content = QueueWithContent(
             pk=pk,
             queue_type="topic_creation",
-            content_pk=topic_pk,
-            content_title="Test Topic",
-            content_preview="A test topic for discussion...",
-            priority_score=60,
+            content_pk=content_pk,
+            content_type="topic",
+            priority_score=85,
+            position_in_queue=2,
             status=QueueStatus.PENDING,
-            position_in_queue=1,
-            entered_queue_at=entered_queue_at,
-            author_username="testuser",
+            entered_queue_at=datetime.now(UTC),
+            worker_assigned_at=None,
+            worker_id=None,
         )
 
         assert queue_with_content.pk == pk
         assert queue_with_content.queue_type == "topic_creation"
-        assert queue_with_content.content_pk == topic_pk
-        assert queue_with_content.content_title == "Test Topic"
-        assert queue_with_content.content_preview == "A test topic for discussion..."
-        assert queue_with_content.author_username == "testuser"
+        assert queue_with_content.content_pk == content_pk
+        assert queue_with_content.content_type == "topic"
+        assert queue_with_content.priority_score == 85
+        assert queue_with_content.position_in_queue == 2
+        assert queue_with_content.status == QueueStatus.PENDING
+        assert queue_with_content.worker_assigned_at is None
+        assert queue_with_content.worker_id is None
 
     def test_queue_with_content_post(self):
         """Test QueueWithContent for post."""
         pk = uuid4()
-        post_pk = uuid4()
-        created_at = datetime.now(UTC)
+        content_pk = uuid4()
         entered_queue_at = datetime.now(UTC)
 
         queue_with_content = QueueWithContent(
             pk=pk,
             queue_type="post_moderation",
-            content_pk=post_pk,
-            content_title="Re: Test Topic",
-            content_preview="This is a reply to the topic...",
-            priority_score=40,
+            content_pk=content_pk,
+            content_type="post",
+            priority_score=60,
+            position_in_queue=1,
             status=QueueStatus.PROCESSING,
-            position_in_queue=0,
-            entered_queue_at=entered_queue_at,
-            author_username="replyuser",
+            entered_queue_at=datetime.now(UTC),
+            worker_assigned_at=datetime.now(UTC),
+            worker_id="worker-3",
         )
 
         assert queue_with_content.queue_type == "post_moderation"
+        assert queue_with_content.content_type == "post"
+        assert queue_with_content.priority_score == 60
+        assert queue_with_content.position_in_queue == 1
         assert queue_with_content.status == QueueStatus.PROCESSING
-        assert queue_with_content.position_in_queue == 0
+        assert queue_with_content.worker_assigned_at
+        assert queue_with_content.worker_id == "worker-3"

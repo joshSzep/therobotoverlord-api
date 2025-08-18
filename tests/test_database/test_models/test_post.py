@@ -135,7 +135,8 @@ class TestPostCreate:
             topic_pk=topic_pk,
             parent_post_pk=parent_post_pk,
             author_pk=author_pk,
-            content="This is a reply to another post.",
+            content="This is a reply post",
+            submitted_at=datetime.now(UTC),
         )
 
         assert post_create.parent_post_pk == parent_post_pk
@@ -241,20 +242,22 @@ class TestPostThread:
             topic_pk=topic_pk,
             parent_post_pk=None,
             author_pk=author_pk,
-            content="Root post in thread.",
-            status=ContentStatus.APPROVED,
-            submitted_at=created_at,
-            approved_at=created_at,
             author_username="testuser",
+            content="Thread root post",
+            status=ContentStatus.APPROVED,
+            overlord_feedback=None,
+            submitted_at=datetime.now(UTC),
+            approved_at=None,
+            created_at=created_at,
             reply_count=3,
-            thread_depth=0,
+            depth_level=0,
         )
 
         assert post_thread.pk == pk
-        assert post_thread.content == "Root post in thread."
+        assert post_thread.content == "Thread root post"
         assert post_thread.author_username == "testuser"
         assert post_thread.reply_count == 3
-        assert post_thread.thread_depth == 0
+        assert post_thread.depth_level == 0
 
     def test_post_thread_nested(self):
         """Test nested PostThread instance."""
@@ -269,18 +272,20 @@ class TestPostThread:
             topic_pk=topic_pk,
             parent_post_pk=parent_post_pk,
             author_pk=author_pk,
-            content="Nested reply in thread.",
-            status=ContentStatus.APPROVED,
-            submitted_at=created_at,
-            approved_at=created_at,
             author_username="replyuser",
-            reply_count=1,
-            thread_depth=2,
+            content="Nested reply post",
+            status=ContentStatus.PENDING,
+            overlord_feedback="Needs review",
+            submitted_at=datetime.now(UTC),
+            approved_at=None,
+            created_at=created_at,
+            reply_count=0,
+            depth_level=2,
         )
 
         assert post_thread.parent_post_pk == parent_post_pk
-        assert post_thread.thread_depth == 2
-        assert post_thread.reply_count == 1
+        assert post_thread.depth_level == 2
+        assert post_thread.reply_count == 0
 
 
 class TestPostSummary:
