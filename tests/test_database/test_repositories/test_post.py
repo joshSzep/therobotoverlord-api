@@ -135,7 +135,7 @@ class TestPostRepository:
                 "parent_post_pk": None,
                 "author_pk": uuid4(),
                 "content": post_update.content,
-                "status": post_update.status.value,
+                "status": post_update.status.value if post_update.status else "pending",
                 "overlord_feedback": None,
                 "submitted_at": datetime.now(UTC),
                 "approved_at": updated_at,
@@ -166,6 +166,8 @@ class TestPostRepository:
                 "submitted_at": datetime.now(UTC),
                 "approved_at": datetime.now(UTC),
                 "author_username": "user1",
+                "author_display_name": "User One",
+                "author_avatar_url": None,
             },
             {
                 "pk": uuid4(),
@@ -185,7 +187,12 @@ class TestPostRepository:
 
         mock_connection.fetch.return_value = mock_records
 
-        result = await post_repository.get_by_topic(topic_pk, limit=10, offset=0)
+        with patch(
+            "therobotoverlord_api.database.repositories.post.get_db_connection"
+        ) as mock_get_connection:
+            mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+            result = await post_repository.get_by_topic(topic_pk, limit=10, offset=0)
 
         assert len(result) == 2
         assert all(isinstance(post, PostWithAuthor) for post in result)
@@ -366,38 +373,6 @@ class TestPostRepository:
         assert result.status == ContentStatus.REJECTED
         assert result.overlord_feedback == feedback
         assert result.approved_at is None
-
-    async def test_get_by_topic(self, post_repository, mock_connection):
-        """Test getting posts by topic."""
-        with patch(
-            "therobotoverlord_api.database.repositories.post.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            topic_pk = uuid4()
-            mock_records = [
-                {
-                    "pk": uuid4(),
-                    "created_at": datetime.now(UTC),
-                    "updated_at": None,
-                    "topic_pk": topic_pk,
-                    "parent_post_pk": None,
-                    "author_pk": uuid4(),
-                    "content": "Test post content",
-                    "status": ContentStatus.APPROVED.value,
-                    "overlord_feedback": None,
-                    "submitted_at": datetime.now(UTC),
-                    "approved_at": datetime.now(UTC),
-                    "author_username": "testuser",
-                }
-            ]
-
-            mock_connection.fetch.return_value = mock_records
-
-            result = await post_repository.get_by_topic(topic_pk, limit=10, offset=0)
-
-        assert len(result) == 1
-        assert isinstance(result[0], PostWithAuthor)
-        assert result[0].content == "Test post content"
 
     async def test_search_posts_with_topic_filter(
         self, post_repository, mock_connection

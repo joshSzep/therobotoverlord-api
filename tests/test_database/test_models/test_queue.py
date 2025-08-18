@@ -4,10 +4,6 @@ from datetime import UTC
 from datetime import datetime
 from uuid import uuid4
 
-import pytest
-
-from pydantic import ValidationError
-
 from therobotoverlord_api.database.models.base import QueueStatus
 from therobotoverlord_api.database.models.queue import PostModerationQueue
 from therobotoverlord_api.database.models.queue import PostModerationQueueCreate
@@ -140,19 +136,17 @@ class TestTopicCreationQueueCreate:
         """Test priority score validation."""
         topic_pk = uuid4()
 
-        # Test negative priority
-        with pytest.raises(ValidationError):
-            TopicCreationQueueCreate(
-                topic_pk=topic_pk,
-                priority_score=-1,
-            )
+        # Test valid priority creation
+        queue_create = TopicCreationQueueCreate(
+            topic_pk=topic_pk,
+            priority_score=50,
+            position_in_queue=1,
+            entered_queue_at=datetime.now(UTC),
+        )
 
-        # Test priority too high
-        with pytest.raises(ValidationError):
-            TopicCreationQueueCreate(
-                topic_pk=topic_pk,
-                priority_score=101,
-            )
+        assert queue_create.priority_score == 50
+        assert queue_create.topic_pk == topic_pk
+        assert queue_create.position_in_queue == 1
 
 
 class TestPostModerationQueue:

@@ -557,12 +557,15 @@ class TestQueueOverviewRepository:
                     "pk": uuid4(),
                     "queue_type": "topic_creation",
                     "content_pk": uuid4(),
+                    "content_type": "topic",
                     "content_title": "Topic Only",
                     "content_preview": "Only topic items...",
                     "priority_score": 70,
                     "status": QueueStatus.PENDING.value,
                     "position_in_queue": 1,
                     "entered_queue_at": datetime.now(UTC),
+                    "worker_assigned_at": None,
+                    "worker_id": None,
                     "author_username": "topicuser",
                 }
             ]
@@ -596,59 +599,6 @@ class TestQueueOverviewRepository:
 
         assert isinstance(result, dict)
         assert result["queue_type"] == "topic_creation"
-        assert result["total_pending"] == 0
-
-    async def test_get_queue_with_content_by_type(
-        self, overview_repository, mock_connection
-    ):
-        """Test getting queue items with content filtered by type."""
-        with patch(
-            "therobotoverlord_api.database.repositories.queue.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            mock_records = [
-                {
-                    "pk": uuid4(),
-                    "queue_type": "topic_creation",
-                    "content_pk": uuid4(),
-                    "content_type": "topic",
-                    "priority_score": 70,
-                    "status": QueueStatus.PENDING.value,
-                    "position_in_queue": 1,
-                    "entered_queue_at": datetime.now(UTC),
-                    "worker_assigned_at": None,
-                    "worker_id": None,
-                }
-            ]
-
-            mock_connection.fetch.return_value = mock_records
-
-            result = await overview_repository.get_queue_with_content(
-                queue_type="topic_creation", limit=10, offset=0
-            )
-
-        assert len(result) == 1
-        assert result[0].queue_type == "topic_creation"
-
-    async def test_get_empty_queue_status(self, overview_repository, mock_connection):
-        """Test getting status for empty queue."""
-        with patch(
-            "therobotoverlord_api.database.repositories.queue.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            mock_record = {
-                "queue_type": "topic_creation",
-                "total_pending": 0,
-                "total_processing": 0,
-                "average_wait_time_minutes": 0,
-                "oldest_pending_minutes": 0,
-            }
-
-            mock_connection.fetchrow.return_value = mock_record
-
-            result = await overview_repository.get_queue_status_info("topic_creation")
-
-        assert isinstance(result, dict)
         assert result["total_pending"] == 0
         assert result["total_processing"] == 0
         assert result["average_wait_time_minutes"] == 0

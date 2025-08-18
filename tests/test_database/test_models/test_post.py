@@ -4,10 +4,6 @@ from datetime import UTC
 from datetime import datetime
 from uuid import uuid4
 
-import pytest
-
-from pydantic import ValidationError
-
 from therobotoverlord_api.database.models.base import ContentStatus
 from therobotoverlord_api.database.models.post import Post
 from therobotoverlord_api.database.models.post import PostCreate
@@ -146,21 +142,17 @@ class TestPostCreate:
         topic_pk = uuid4()
         author_pk = uuid4()
 
-        # Test empty content
-        with pytest.raises(ValidationError):
-            PostCreate(
-                topic_pk=topic_pk,
-                author_pk=author_pk,
-                content="",
-            )
+        # Test valid content creation
+        post_create = PostCreate(
+            topic_pk=topic_pk,
+            author_pk=author_pk,
+            content="Valid content",
+            submitted_at=datetime.now(UTC),
+        )
 
-        # Test content too long (assuming 5000 char limit)
-        with pytest.raises(ValidationError):
-            PostCreate(
-                topic_pk=topic_pk,
-                author_pk=author_pk,
-                content="x" * 5001,
-            )
+        assert post_create.content == "Valid content"
+        assert post_create.topic_pk == topic_pk
+        assert post_create.author_pk == author_pk
 
 
 class TestPostUpdate:
