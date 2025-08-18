@@ -426,7 +426,7 @@ class QueueOverviewRepository:
             JOIN users u ON t.author_pk = u.pk
             WHERE tcq.status != 'completed'
         """
-        
+
         if queue_type == "topic_creation":
             query = f"{base_query} ORDER BY tcq.priority_score ASC, tcq.entered_queue_at ASC LIMIT ${1} OFFSET ${2}"
             params = [limit, offset]
@@ -456,9 +456,9 @@ class QueueOverviewRepository:
             # Get all queue types
             query = f"""
                 {base_query}
-                
+
                 UNION ALL
-                
+
                 SELECT
                     'post_moderation' as queue_type,
                     pmq.pk,
@@ -475,7 +475,7 @@ class QueueOverviewRepository:
                 JOIN topics t ON p.topic_pk = t.pk
                 JOIN users u ON p.author_pk = u.pk
                 WHERE pmq.status != 'completed'
-                
+
                 ORDER BY priority_score ASC, entered_queue_at ASC
                 LIMIT ${1} OFFSET ${2}
             """
@@ -521,10 +521,14 @@ class QueueOverviewRepository:
 
         async with get_db_connection() as connection:
             record = await connection.fetchrow(query)
-            return dict(record) if record else {
-                "queue_type": queue_type,
-                "total_pending": 0,
-                "total_processing": 0,
-                "average_wait_time_minutes": 0,
-                "oldest_pending_minutes": 0,
-            }
+            return (
+                dict(record)
+                if record
+                else {
+                    "queue_type": queue_type,
+                    "total_pending": 0,
+                    "total_processing": 0,
+                    "average_wait_time_minutes": 0,
+                    "oldest_pending_minutes": 0,
+                }
+            )

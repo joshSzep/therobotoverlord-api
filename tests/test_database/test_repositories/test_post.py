@@ -228,7 +228,9 @@ class TestPostRepository:
 
     async def test_get_by_author(self, post_repository, mock_connection):
         """Test getting posts by author."""
-        with patch("therobotoverlord_api.database.repositories.post.get_db_connection") as mock_get_conn:
+        with patch(
+            "therobotoverlord_api.database.repositories.post.get_db_connection"
+        ) as mock_get_conn:
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
             author_pk = uuid4()
             mock_records = [
@@ -434,7 +436,9 @@ class TestPostRepository:
 
     async def test_get_graveyard_posts(self, post_repository, mock_connection):
         """Test getting graveyard (rejected) posts."""
-        with patch("therobotoverlord_api.database.repositories.post.get_db_connection") as mock_get_conn:
+        with patch(
+            "therobotoverlord_api.database.repositories.post.get_db_connection"
+        ) as mock_get_conn:
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
             mock_records = [
                 {

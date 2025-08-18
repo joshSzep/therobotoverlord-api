@@ -248,7 +248,7 @@ class TestTopicRepository:
             result = await topic_repository.get_by_author(author_pk, limit=10, offset=0)
 
         assert len(result) == 1
-        assert isinstance(result[0], TopicSummary)
+        assert isinstance(result[0], Topic)
         assert result[0].author_pk == author_pk
 
     async def test_search_topics(self, topic_repository, mock_connection):
@@ -283,7 +283,7 @@ class TestTopicRepository:
     async def test_approve_topic(self, topic_repository, mock_connection):
         """Test approving a topic."""
         with patch(
-            "therobotoverlord_api.database.repositories.topic.get_db_connection"
+            "therobotoverlord_api.database.repositories.base.get_db_connection"
         ) as mock_get_conn:
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
             topic_pk = uuid4()
