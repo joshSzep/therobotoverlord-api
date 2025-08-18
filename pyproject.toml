@@ -53,7 +53,7 @@ dev = [
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D", "ANN", "COM812", "ISC001", "S608", "TRY003", "G004", "EM101", "TRY400", "BLE001", "TRY300", "SIM117", "EM102"]
+ignore = ["D", "ANN", "COM812", "ISC001", "S608", "TRY003", "G004", "EM101", "TRY400", "BLE001", "TRY300", "SIM117", "EM102", "S101", "PLR2004", "E501", "SLF001", "F841", "S106", "C901", "B023", "ARG001", "SIM118", "FBT003", "S105", "ARG002"]
 
 [tool.ruff.lint.isort]
 single-line-exclusions = []

@@ -1,9 +1,10 @@
-"""Database configuration for The Robot Overlord API."""
+"""Database configuration for The Robot Overlord."""
 
 import os
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 
 class DatabaseSettings(BaseSettings):
@@ -51,9 +52,7 @@ class DatabaseSettings(BaseSettings):
         default=None, description="Path to SSL CA certificate"
     )
 
-    class Config:
-        env_prefix = "DATABASE_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="DATABASE_", case_sensitive=False)
 
 
 def get_database_settings() -> DatabaseSettings:

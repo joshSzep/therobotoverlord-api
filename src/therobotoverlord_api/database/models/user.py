@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 
 from therobotoverlord_api.database.models.base import BaseDBModel
 from therobotoverlord_api.database.models.base import UserRole
@@ -54,8 +55,7 @@ class UserLeaderboard(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserProfile(BaseModel):
@@ -67,5 +67,4 @@ class UserProfile(BaseModel):
     role: UserRole
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
