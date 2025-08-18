@@ -213,7 +213,7 @@ def _get_client_ip(request: Request) -> str | None:
         return real_ip
 
     # Fall back to direct connection
-    if hasattr(request.client, "host"):
+    if request.client and hasattr(request.client, "host"):
         return request.client.host
 
     return None

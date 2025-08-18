@@ -4,8 +4,8 @@ import secrets
 
 import httpx
 
-from google.auth.transport.requests import Request
-from google.oauth2 import id_token
+from google.auth.transport.requests import Request  # type: ignore[import-untyped]
+from google.oauth2 import id_token  # type: ignore[import-untyped]
 from google_auth_oauthlib.flow import Flow
 
 from therobotoverlord_api.auth.models import GoogleUserInfo

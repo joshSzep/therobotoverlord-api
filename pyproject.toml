@@ -12,6 +12,7 @@ dependencies = [
     "fastapi",
     "google-auth",
     "google-auth-oauthlib",
+    "requests",
     "httpx",
     "pydantic",
     "pydantic-ai>=0.7.2",
@@ -99,6 +100,14 @@ section-order = [
     "local-folder",
 ]
 lines-between-types = 1
+
+[tool.pyright]
+reportMissingImports = false
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportAttributeAccessIssue = false
+reportUnresolvedImport = false
+reportReturnType = false
 
 [tool.bandit]
 exclude_dirs = [

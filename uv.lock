@@ -2053,6 +2053,7 @@ dependencies = [
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-multipart" },
     { name = "redis" },
+    { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
@@ -2092,6 +2093,7 @@ requires-dist = [
     { name = "python-jose", extras = ["cryptography"] },
     { name = "python-multipart" },
     { name = "redis" },
+    { name = "requests" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets" },
 ]

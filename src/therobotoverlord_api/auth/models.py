@@ -17,6 +17,7 @@ class TokenClaims(BaseModel):
     role: UserRole = Field(description="User role")
     sid: str = Field(description="Session ID")
     authz_ver: int = Field(default=1, description="Authorization version")
+    token_version: int = Field(default=1, description="Token version")
     permissions: list[str] = Field(default_factory=list, description="User permissions")
     scopes: list[str] = Field(default_factory=list, description="Token scopes")
     iss: str = Field(description="Token issuer")

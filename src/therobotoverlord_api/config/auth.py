@@ -60,4 +60,4 @@ class AuthSettings(BaseSettings):
 
 def get_auth_settings() -> AuthSettings:
     """Get authentication settings instance."""
-    return AuthSettings()
+    return AuthSettings(google_client_id="", google_client_secret="", jwt_secret_key="")

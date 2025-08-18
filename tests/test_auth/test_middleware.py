@@ -111,13 +111,7 @@ class TestAuthenticationMiddleware:
             mock_session_cls.return_value = MagicMock()
             mock_user_cls.return_value = MagicMock()
 
-            middleware = AuthenticationMiddleware(app=MagicMock())
-
-            # Store references to mocked services for test access
-            middleware._mock_jwt = mock_jwt_cls.return_value
-            middleware._mock_session = mock_session_cls.return_value
-            middleware._mock_user = mock_user_cls.return_value
-            return middleware
+            return AuthenticationMiddleware(app=MagicMock())
 
     @pytest.fixture
     def mock_request(self):
@@ -456,4 +450,6 @@ class TestAuthenticationMiddleware:
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user(mock_request)
 
-        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+        exception = exc_info.value
+        assert isinstance(exception, HTTPException)
+        assert exception.status_code == status.HTTP_403_FORBIDDEN

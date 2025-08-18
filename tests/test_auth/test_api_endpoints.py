@@ -13,6 +13,7 @@ from fastapi import status
 from httpx import AsyncClient
 
 from therobotoverlord_api.auth.middleware import AuthenticatedUser
+from therobotoverlord_api.database.models.base import UserRole
 
 
 class TestAuthAPIEndpoints:
@@ -98,9 +99,10 @@ class TestAuthAPIEndpoints:
             with patch(middleware_patch) as mock_get_user:
                 mock_get_user.return_value = AuthenticatedUser(
                     user_id=uuid4(),
-                    role="citizen",
+                    role=UserRole.CITIZEN,
                     permissions=[],
                     session_id="test-session-id",
+                    token_version=1,
                 )
 
                 with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
@@ -145,9 +147,10 @@ class TestAuthAPIEndpoints:
             with patch(middleware_patch) as mock_get_user:
                 mock_get_user.return_value = AuthenticatedUser(
                     user_id=uuid4(),
-                    role="citizen",
+                    role=UserRole.CITIZEN,
                     permissions=[],
                     session_id="test-session-id",
+                    token_version=1,
                 )
 
                 with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
@@ -181,9 +184,10 @@ class TestAuthAPIEndpoints:
             with patch(middleware_patch) as mock_get_user:
                 mock_get_user.return_value = AuthenticatedUser(
                     user_id=uuid4(),
-                    role="citizen",
+                    role=UserRole.CITIZEN,
                     permissions=[],
                     session_id="test-session-id",
+                    token_version=1,
                 )
 
                 with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
@@ -217,9 +221,10 @@ class TestAuthAPIEndpoints:
             with patch(middleware_patch) as mock_get_user:
                 mock_get_user.return_value = AuthenticatedUser(
                     user_id=test_user_id,
-                    role="citizen",
+                    role=UserRole.CITIZEN,
                     permissions=["read"],
                     session_id="test-session-id",
+                    token_version=1,
                 )
 
                 auth_service_patch = (

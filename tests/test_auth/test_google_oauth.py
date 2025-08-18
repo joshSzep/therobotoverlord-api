@@ -3,6 +3,7 @@
 import asyncio
 
 from unittest.mock import AsyncMock
+from unittest.mock import PropertyMock
 from unittest.mock import patch
 from urllib.parse import parse_qs
 from urllib.parse import urlparse
@@ -275,10 +276,26 @@ class TestGoogleOAuthService:
         )
 
         async def exchange_token(code):
-            with patch(
-                "therobotoverlord_api.auth.google_oauth.httpx.AsyncClient",
-                return_value=mock_httpx_client,
+            with (
+                patch("google_auth_oauthlib.flow.Flow.fetch_token"),
+                patch(
+                    "google_auth_oauthlib.flow.Flow.credentials",
+                    new_callable=PropertyMock,
+                ) as mock_credentials,
+                patch(
+                    "google.oauth2.id_token.verify_oauth2_token",
+                    return_value={
+                        "sub": f"user_{code}",
+                        "email": f"user{code}@example.com",
+                        "email_verified": True,
+                        "name": f"User {code}",
+                        "given_name": "User",
+                        "family_name": str(code),
+                    },
+                ),
             ):
+                mock_credentials.return_value.id_token = "mock_id_token"
+                mock_credentials.return_value.token = {"access_token": "mock_token"}
                 return await oauth_service.exchange_code_for_tokens(
                     f"code_{code}", f"state_{code}"
                 )
@@ -289,29 +306,43 @@ class TestGoogleOAuthService:
 
         # All should succeed
         assert len(results) == 5
-        for result in results:
-            assert result["access_token"] == "mock_access_token"
+        for i, result in enumerate(results):
+            user_info, token = result
+            assert user_info.id == f"user_{i}"
+            assert user_info.email == f"user{i}@example.com"
 
     @pytest.mark.asyncio
     async def test_http_client_context_management(self, oauth_service):
         """Test that HTTP client is properly managed."""
-        with patch(
-            "therobotoverlord_api.auth.google_oauth.httpx.AsyncClient"
-        ) as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client_class.return_value = mock_client
+        with (
+            patch("google_auth_oauthlib.flow.Flow.fetch_token"),
+            patch(
+                "google_auth_oauthlib.flow.Flow.credentials", new_callable=PropertyMock
+            ) as mock_credentials,
+            patch(
+                "google.oauth2.id_token.verify_oauth2_token",
+                return_value={
+                    "sub": "test_user",
+                    "email": "test@example.com",
+                    "email_verified": True,
+                    "name": "Test User",
+                    "given_name": "Test",
+                    "family_name": "User",
+                },
+            ),
+        ):
+            mock_credentials.return_value.id_token = "mock_id_token"
+            mock_credentials.return_value.token = {"access_token": "test"}
 
-            # Mock successful response
-            mock_response = AsyncMock()
-            mock_response.json.return_value = {"access_token": "test"}
-            mock_response.raise_for_status.return_value = None
-            mock_client.__aenter__.return_value.post.return_value = mock_response
+            result = await oauth_service.exchange_code_for_tokens(
+                "test_code", "test_state"
+            )
 
-            await oauth_service.exchange_code_for_tokens("test_code", "test_state")
-
-            # Verify context manager was used
-            mock_client.__aenter__.assert_called_once()
-            mock_client.__aexit__.assert_called_once()
+            # Verify successful exchange
+            user_info, token = result
+            assert user_info.id == "test_user"
+            assert user_info.email == "test@example.com"
+            assert token == {"access_token": "test"}
 
     def test_google_user_info_model(self, google_user_info):
         """Test GoogleUserInfo model functionality."""

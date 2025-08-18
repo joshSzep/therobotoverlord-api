@@ -184,7 +184,7 @@ class JWTService:
             if isinstance(value, UUID):
                 serializable_claims[key] = str(value)
             elif isinstance(value, datetime):
-                serializable_claims[key] = int(value.timestamp())
+                serializable_claims[key] = str(int(value.timestamp()))
             else:
                 serializable_claims[key] = value
 

@@ -278,7 +278,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return real_ip
 
         # Fall back to direct connection
-        if hasattr(request.client, "host"):
+        if request.client and hasattr(request.client, "host"):
             return request.client.host
 
         return None
@@ -316,11 +316,10 @@ class OptionalAuthenticationMiddleware(BaseHTTPMiddleware):
 
             return AuthenticatedUser(
                 user_id=user.pk,
-                username=user.username,
                 role=user.role,
-                loyalty_score=user.loyalty_score,
                 permissions=claims.permissions,
                 session_id=claims.sid,
+                token_version=claims.token_version,
             )
         except Exception:
             return None

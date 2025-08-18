@@ -42,6 +42,7 @@ class UserUpdate(BaseModel):
     is_banned: bool | None = None
     is_sanctioned: bool | None = None
     email_verified: bool | None = None
+    google_id: str | None = None
 
 
 class UserLeaderboard(BaseModel):
