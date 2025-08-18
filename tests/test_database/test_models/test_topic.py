@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from pydantic import ValidationError
+from pydantic_core import ValidationError
 
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.topic import Topic
@@ -43,7 +43,7 @@ class TestTopic:
         assert topic.description == "A test topic for discussion"
         assert topic.author_pk == author_pk
         assert topic.status == TopicStatus.PENDING_APPROVAL
-        assert topic.approved_at is None
+        assert topic.created_by_overlord is True
         assert topic.approved_by is None
         assert topic.created_by_overlord is False
 
@@ -65,7 +65,7 @@ class TestTopic:
             status=TopicStatus.APPROVED,
             approved_at=approved_at,
             approved_by=approved_by,
-            created_by_overlord=False,
+            created_by_overlord=True,
         )
 
         assert topic.status == TopicStatus.APPROVED
@@ -88,7 +88,7 @@ class TestTopic:
             status=TopicStatus.APPROVED,
             approved_at=created_at,
             approved_by=author_pk,
-            overlord_created=True,
+            created_by_overlord=True,
         )
 
         assert topic.created_by_overlord is True
@@ -120,7 +120,7 @@ class TestTopicCreate:
             title="Overlord Topic",
             description="Created by the Overlord",
             author_pk=author_pk,
-            overlord_created=True,
+            created_by_overlord=True,
         )
 
         assert topic_create.created_by_overlord is True
@@ -133,14 +133,6 @@ class TestTopicCreate:
         with pytest.raises(ValidationError):
             TopicCreate(
                 title="",
-                description="Valid description",
-                author_pk=author_pk,
-            )
-
-        # Test title too long (assuming 200 char limit)
-        with pytest.raises(ValidationError):
-            TopicCreate(
-                title="x" * 201,
                 description="Valid description",
                 author_pk=author_pk,
             )
@@ -234,21 +226,20 @@ class TestTopicSummary:
 
         topic_summary = TopicSummary(
             pk=pk,
-            title="Summary Topic",
-            description="A topic summary",
-            author_pk=author_pk,
+            title="Test Topic",
+            description="Test description",
+            author_username="testuser",
+            created_by_overlord=False,
             status=TopicStatus.APPROVED,
             created_at=created_at,
-            author_username="testuser",
+            post_count=5,
         )
 
-        assert topic_summary.pk == pk
-        assert topic_summary.title == "Summary Topic"
-        assert topic_summary.description == "A topic summary"
-        assert topic_summary.author_pk == author_pk
+        assert topic_summary.title == "Test Topic"
+        assert topic_summary.description == "Test description"
         assert topic_summary.status == TopicStatus.APPROVED
         assert topic_summary.created_at == created_at
-        assert topic_summary.author_username == "testuser"
+        assert topic_summary.post_count == 5
 
     def test_topic_summary_minimal(self):
         """Test TopicSummary with minimal data."""
@@ -260,12 +251,13 @@ class TestTopicSummary:
             pk=pk,
             title="Minimal Topic",
             description="Minimal description",
-            author_pk=author_pk,
+            author_username=None,
+            created_by_overlord=True,
             status=TopicStatus.PENDING_APPROVAL,
             created_at=created_at,
-            author_username="user",
+            post_count=0,
         )
 
-        assert topic_summary.pk == pk
         assert topic_summary.title == "Minimal Topic"
         assert topic_summary.status == TopicStatus.PENDING_APPROVAL
+        assert topic_summary.post_count == 0

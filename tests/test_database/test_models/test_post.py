@@ -116,13 +116,14 @@ class TestPostCreate:
         post_create = PostCreate(
             topic_pk=topic_pk,
             author_pk=author_pk,
-            content="This is a new post content.",
+            content="Test post content",
+            submitted_at=datetime.now(UTC),
         )
 
         assert post_create.topic_pk == topic_pk
         assert post_create.parent_post_pk is None
         assert post_create.author_pk == author_pk
-        assert post_create.content == "This is a new post content."
+        assert post_create.content == "Test post content"
 
     def test_post_create_with_parent(self):
         """Test PostCreate with parent post (reply)."""
