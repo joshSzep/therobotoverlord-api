@@ -1,0 +1,51 @@
+[project]
+name = "therobotoverlord-api"
+version = "0.1.0"
+description = "The Robot Overlord API"
+authors = [
+    { name = "Joshua Szepietowski", email = "joshSzep@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "arq",
+    "asyncpg",
+    "fastapi",
+    "google-auth",
+    "google-auth-oauthlib",
+    "httpx",
+    "pydantic",
+    "pydantic-ai>=0.7.2",
+    "pydantic-settings",
+    "python-dotenv",
+    "python-jose[cryptography]",
+    "python-multipart",
+    "redis",
+    "uvicorn[standard]",
+    "websockets",
+]
+
+[project.scripts]
+therobotoverlord-api = "therobotoverlord_api:main"
+
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "bandit",
+    "mypy",
+    "pre-commit",
+    "psycopg[binary,pool]",
+    "pyright",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-postgresql",
+    "ruff",
+    "safety",
+    "testcontainers",
+    "ty",
+]
