@@ -26,7 +26,7 @@ FastAPI backend for The Robot Overlord debate platform.
    ```bash
    # Set environment variable for local development
    export DATABASE_URL="postgresql://postgres:password@localhost:5432/therobotoverlord"
-   
+
    # Run migrations
    cd migrations
    yoyo apply --database $DATABASE_URL
@@ -38,11 +38,11 @@ FastAPI backend for The Robot Overlord debate platform.
    python -c "
    import asyncio
    from src.therobotoverlord_api.database.health import health_checker
-   
+
    async def test():
        result = await health_checker.full_health_check()
        print(result)
-   
+
    asyncio.run(test())
    "
    ```

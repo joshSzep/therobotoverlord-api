@@ -1,15 +1,17 @@
 """Base models and types for The Robot Overlord API database."""
 
+from datetime import UTC
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from pydantic import Field
 
 
 class UserRole(str, Enum):
     """User role enumeration."""
+
     CITIZEN = "citizen"
     MODERATOR = "moderator"
     ADMIN = "admin"
@@ -18,6 +20,7 @@ class UserRole(str, Enum):
 
 class ContentStatus(str, Enum):
     """Content status enumeration."""
+
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -25,6 +28,7 @@ class ContentStatus(str, Enum):
 
 class TopicStatus(str, Enum):
     """Topic status enumeration."""
+
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -32,6 +36,7 @@ class TopicStatus(str, Enum):
 
 class QueueStatus(str, Enum):
     """Queue processing status enumeration."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -39,6 +44,7 @@ class QueueStatus(str, Enum):
 
 class AppealStatus(str, Enum):
     """Appeal status enumeration."""
+
     PENDING = "pending"
     SUSTAINED = "sustained"
     DENIED = "denied"
@@ -46,6 +52,7 @@ class AppealStatus(str, Enum):
 
 class FlagStatus(str, Enum):
     """Flag status enumeration."""
+
     PENDING = "pending"
     SUSTAINED = "sustained"
     DISMISSED = "dismissed"
@@ -53,12 +60,14 @@ class FlagStatus(str, Enum):
 
 class SanctionType(str, Enum):
     """Sanction type enumeration."""
+
     POSTING_FREEZE = "posting_freeze"
     RATE_LIMIT = "rate_limit"
 
 
 class ContentType(str, Enum):
     """Content type enumeration."""
+
     TOPIC = "topic"
     POST = "post"
     PRIVATE_MESSAGE = "private_message"
@@ -66,17 +75,18 @@ class ContentType(str, Enum):
 
 class ModerationOutcome(str, Enum):
     """Moderation outcome enumeration."""
+
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
 class BaseDBModel(BaseModel):
     """Base model for database entities."""
-    
-    id: UUID
+
+    pk: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    
+    updated_at: datetime | None = None
+
     class Config:
         from_attributes = True
         use_enum_values = True
@@ -84,9 +94,9 @@ class BaseDBModel(BaseModel):
 
 class TimestampMixin(BaseModel):
     """Mixin for timestamp fields."""
-    
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = None
-    
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime | None = None
+
     class Config:
         from_attributes = True

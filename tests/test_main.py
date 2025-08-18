@@ -2,5 +2,5 @@ from therobotoverlord_api import main
 
 
 def test_main() -> None:
-    main()
-    assert True
+    """Test the main function."""
+    main()  # Should not raise any exceptions

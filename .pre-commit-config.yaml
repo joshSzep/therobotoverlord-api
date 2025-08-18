@@ -62,7 +62,7 @@ repos:
         entry: uv run bandit
         language: system
         types: [python]
-        args: [-r, src/, -f, json]
+        args: [-r, src/, -f, json, --ini, .bandit]
         exclude: ^tests/
         pass_filenames: false
 

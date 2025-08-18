@@ -50,3 +50,18 @@ dev = [
     "ty",
     "yoyo-migrations",
 ]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D", "ANN", "COM812", "ISC001", "S608", "TRY003", "G004", "EM101", "TRY400", "BLE001", "TRY300", "SIM117", "EM102"]
+
+[tool.ruff.lint.isort]
+single-line-exclusions = []
+force-single-line = true
+known-first-party = ["therobotoverlord_api"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+lines-between-types = 1
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B608"]
