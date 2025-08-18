@@ -22,7 +22,6 @@ dependencies = [
     "redis",
     "uvicorn[standard]",
     "websockets",
-    "yoyo-migrations",
 ]
 
 [project.scripts]
@@ -37,6 +36,7 @@ dev = [
     "bandit",
     "mypy",
     "pre-commit",
+    "psycopg2-binary>=2.9.10",
     "psycopg[binary,pool]",
     "pyright",
     "pytest",
@@ -48,4 +48,5 @@ dev = [
     "ruff",
     "testcontainers",
     "ty",
+    "yoyo-migrations",
 ]
