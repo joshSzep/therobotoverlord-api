@@ -141,6 +141,25 @@ class PostRepository(BaseRepository[Post]):
             author_pk, ContentStatus.REJECTED, limit, offset
         )
 
+    async def get_graveyard_posts_by_author(
+        self, author_pk: UUID, limit: int = 100, offset: int = 0
+    ) -> list[PostWithAuthor]:
+        """Get rejected posts by author with author information."""
+        query = """
+            SELECT
+                p.*,
+                u.username as author_username
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            WHERE p.status = 'rejected' AND p.author_pk = $1
+            ORDER BY p.submitted_at ASC
+            LIMIT $2 OFFSET $3
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, author_pk, limit, offset)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
     async def get_thread_view(
         self, topic_pk: UUID, limit: int = 100, offset: int = 0
     ) -> list[PostThread]:
@@ -271,7 +290,7 @@ class PostRepository(BaseRepository[Post]):
     async def get_recent_approved_posts(
         self, limit: int = 100, offset: int = 0
     ) -> list[PostWithAuthor]:
-        """Get recent approved posts across all topics."""
+        """Get recent approved posts across all topics, ordered chronologically by submission."""
         query = """
             SELECT
                 p.*,
@@ -279,7 +298,7 @@ class PostRepository(BaseRepository[Post]):
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'approved'
-            ORDER BY p.approved_at DESC
+            ORDER BY p.submitted_at ASC
             LIMIT $1 OFFSET $2
         """
 
@@ -309,7 +328,7 @@ class PostRepository(BaseRepository[Post]):
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE {where_clause}
-            ORDER BY p.submitted_at DESC
+            ORDER BY p.submitted_at ASC
             LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}
         """
 

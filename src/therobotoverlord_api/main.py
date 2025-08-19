@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from therobotoverlord_api.api.auth import router as auth_router
+from therobotoverlord_api.api.posts import router as posts_router
 from therobotoverlord_api.api.topics import router as topics_router
 from therobotoverlord_api.auth.middleware import AuthenticationMiddleware
 from therobotoverlord_api.database.connection import close_database
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(posts_router, prefix="/api/v1")
     app.include_router(topics_router, prefix="/api/v1")
 
     @app.get("/health")
