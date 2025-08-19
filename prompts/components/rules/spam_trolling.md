@@ -1,0 +1,1 @@
+**Spam and bad faith trolling**: Repetitive content, obvious bait posts designed to provoke rather than debate, or content clearly intended to waste time rather than engage with ideas will be rejected.

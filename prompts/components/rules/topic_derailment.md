@@ -1,0 +1,1 @@
+**Complete topic derailment**: Posts that entirely abandon the debate topic to discuss unrelated grievances, conspiracy theories, or personal agendas will be rejected without consideration of other merits.

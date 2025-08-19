@@ -1,0 +1,1 @@
+**Doxxing and harassment**: Any attempt to share personal information, encourage harassment of individuals, or make threats (veiled or direct) results in immediate rejection and potential account action.

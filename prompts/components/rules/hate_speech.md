@@ -1,0 +1,1 @@
+**Hate speech and discrimination**: Content promoting violence, hatred, or discrimination based on race, religion, gender, sexuality, nationality, or other protected characteristics is immediately rejected.
