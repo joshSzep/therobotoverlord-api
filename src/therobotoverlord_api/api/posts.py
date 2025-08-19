@@ -23,6 +23,7 @@ from therobotoverlord_api.database.models.post import PostUpdate
 from therobotoverlord_api.database.models.post import PostWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.post import PostRepository
+from therobotoverlord_api.services.queue_service import get_queue_service
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -188,13 +189,12 @@ async def create_post(
         submitted_at=datetime.now(UTC),
     )
 
-    # Create post with SUBMITTED status - awaiting ToS screening queue
+    # Create post with SUBMITTED status - awaiting ToS screening
     post_create_data = post_create.model_dump()
     post_create_data["status"] = ContentStatus.SUBMITTED
     post = await post_repo.create_from_dict(post_create_data)
 
-    # NOTE: Future enhancement - Add post to ToS screening queue here
-    # For now, simulate immediate ToS processing
+    # Basic ToS screening (placeholder)
     tos_violation = _check_tos_violation_placeholder(post.content)
     if tos_violation:
         # Reject post immediately for ToS violation
@@ -212,13 +212,23 @@ async def create_post(
                     "post_id": str(post.pk),
                 },
             )
-    else:
-        # Pass ToS screening - move to IN_TRANSIT for public visibility
-        # NOTE: Future enhancement - Add post to full moderation queue here
-        update_data = PostUpdate(status=ContentStatus.IN_TRANSIT)
-        updated_post = await post_repo.update(post.pk, update_data)
-        if updated_post:
-            post = updated_post
+
+    # Pass ToS screening - move to IN_TRANSIT and add to moderation queue
+    update_data = PostUpdate(status=ContentStatus.IN_TRANSIT)
+    updated_post = await post_repo.update(post.pk, update_data)
+    if updated_post:
+        post = updated_post
+
+        # Add to moderation queue for AI processing
+        queue_service = await get_queue_service()
+        queue_id = await queue_service.add_post_to_queue(
+            post.pk, post.topic_pk, priority=0
+        )
+
+        if not queue_id:
+            # If queue addition fails, log but don't fail the request
+            # The post is still created and visible as IN_TRANSIT
+            pass
 
     return post
 

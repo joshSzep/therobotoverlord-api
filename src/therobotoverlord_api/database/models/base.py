@@ -44,6 +44,15 @@ class QueueStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class QueueType(str, Enum):
+    """Queue type enumeration."""
+
+    TOPIC_MODERATION = "topic_moderation"
+    POST_MODERATION = "post_moderation"
+    PRIVATE_MESSAGE = "private_message"
 
 
 class AppealStatus(str, Enum):

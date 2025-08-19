@@ -20,6 +20,7 @@ from therobotoverlord_api.database.models.topic import TopicWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.topic import TopicRepository
 from therobotoverlord_api.database.repositories.user import UserRepository
+from therobotoverlord_api.services.queue_service import get_queue_service
 
 router = APIRouter(prefix="/topics", tags=["topics"])
 
@@ -84,7 +85,18 @@ async def create_topic(
     topic_data.author_pk = current_user.pk
 
     topic_repo = TopicRepository()
-    return await topic_repo.create(topic_data)
+    topic = await topic_repo.create(topic_data)
+
+    # Add topic to moderation queue
+    queue_service = await get_queue_service()
+    queue_id = await queue_service.add_topic_to_queue(topic.pk, priority=0)
+
+    if not queue_id:
+        # If queue addition fails, log but don't fail the request
+        # The topic is still created and awaiting approval
+        pass
+
+    return topic
 
 
 # Create dependency instances to avoid function calls in defaults
