@@ -337,3 +337,22 @@ class PostRepository(BaseRepository[Post]):
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
             return [PostWithAuthor.model_validate(record) for record in records]
+
+    async def get_in_transit_posts(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[PostWithAuthor]:
+        """Get posts currently in-transit through the evaluation system."""
+        query = """
+            SELECT
+                p.*,
+                u.username as author_username
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            WHERE p.status = 'in_transit'
+            ORDER BY p.submitted_at ASC
+            LIMIT $1 OFFSET $2
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit, offset)
+            return [PostWithAuthor.model_validate(record) for record in records]

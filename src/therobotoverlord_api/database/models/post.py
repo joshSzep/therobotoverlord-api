@@ -21,6 +21,8 @@ class Post(BaseDBModel):
     overlord_feedback: str | None = None
     submitted_at: datetime
     approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    tos_violation: bool = False
 
 
 class PostCreate(BaseModel):
@@ -42,6 +44,8 @@ class PostUpdate(BaseModel):
     status: ContentStatus | None = None
     overlord_feedback: str | None = None
     approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    tos_violation: bool | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,6 +63,8 @@ class PostWithAuthor(BaseModel):
     overlord_feedback: str | None
     submitted_at: datetime
     approved_at: datetime | None
+    rejection_reason: str | None
+    tos_violation: bool
     created_at: datetime
     updated_at: datetime | None
 
@@ -96,5 +102,7 @@ class PostSummary(BaseModel):
     overlord_feedback: str | None
     submitted_at: datetime
     approved_at: datetime | None
+    rejection_reason: str | None
+    tos_violation: bool
 
     model_config = ConfigDict(from_attributes=True)

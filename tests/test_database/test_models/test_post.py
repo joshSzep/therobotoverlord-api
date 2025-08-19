@@ -210,6 +210,8 @@ class TestPostWithAuthor:
             overlord_feedback=None,
             submitted_at=created_at,
             approved_at=created_at,
+            rejection_reason=None,
+            tos_violation=False,
             author_username="testuser",
         )
 
@@ -298,6 +300,8 @@ class TestPostSummary:
             overlord_feedback=None,
             submitted_at=created_at,
             approved_at=created_at,
+            rejection_reason=None,
+            tos_violation=False,
         )
 
         assert post_summary.pk == pk
@@ -323,6 +327,8 @@ class TestPostSummary:
             overlord_feedback="Needs improvement, Citizen.",
             submitted_at=created_at,
             approved_at=None,
+            rejection_reason="Content quality issues",
+            tos_violation=False,
         )
 
         assert post_summary.status == ContentStatus.REJECTED

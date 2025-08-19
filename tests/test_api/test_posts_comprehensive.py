@@ -108,6 +108,8 @@ def sample_post_with_author(sample_post):
         overlord_feedback=sample_post.overlord_feedback,
         submitted_at=sample_post.submitted_at,
         approved_at=sample_post.approved_at,
+        rejection_reason=sample_post.rejection_reason,
+        tos_violation=sample_post.tos_violation,
         created_at=sample_post.created_at,
         updated_at=sample_post.updated_at,
     )
@@ -125,6 +127,8 @@ def sample_post_summary(sample_post):
         overlord_feedback=sample_post.overlord_feedback,
         submitted_at=sample_post.submitted_at,
         approved_at=sample_post.approved_at,
+        rejection_reason=sample_post.rejection_reason,
+        tos_violation=sample_post.tos_violation,
     )
 
 
@@ -204,7 +208,7 @@ class TestGetPost:
         """Test successful retrieval of a specific post."""
         mock_repo = AsyncMock()
         mock_repo.get_by_pk.return_value = sample_post
-        mock_repo.get_approved_by_topic.return_value = [sample_post_with_author]
+        mock_repo.get_by_topic.return_value = [sample_post_with_author]
         mock_repo_class.return_value = mock_repo
 
         response = client.get(f"/api/v1/posts/{sample_post.pk}")
@@ -614,6 +618,8 @@ class TestChronologicalOrdering:
                 overlord_feedback=None,
                 submitted_at=base_time,
                 approved_at=base_time,
+                rejection_reason=None,
+                tos_violation=False,
                 created_at=base_time,
                 updated_at=None,
             ),
@@ -628,6 +634,8 @@ class TestChronologicalOrdering:
                 overlord_feedback=None,
                 submitted_at=base_time + timedelta(minutes=1),
                 approved_at=base_time + timedelta(minutes=1),
+                rejection_reason=None,
+                tos_violation=False,
                 created_at=base_time + timedelta(minutes=1),
                 updated_at=None,
             ),
@@ -642,6 +650,8 @@ class TestChronologicalOrdering:
                 overlord_feedback=None,
                 submitted_at=base_time + timedelta(minutes=2),
                 approved_at=base_time + timedelta(minutes=2),
+                rejection_reason=None,
+                tos_violation=False,
                 created_at=base_time + timedelta(minutes=2),
                 updated_at=None,
             ),

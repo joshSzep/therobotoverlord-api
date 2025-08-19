@@ -23,6 +23,7 @@ class ContentStatus(str, Enum):
     """Content status enumeration."""
 
     PENDING = "pending"
+    IN_TRANSIT = "in_transit"
     APPROVED = "approved"
     REJECTED = "rejected"
 

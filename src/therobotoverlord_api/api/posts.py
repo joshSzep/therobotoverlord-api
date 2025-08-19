@@ -93,6 +93,16 @@ async def get_pending_posts(
     return await post_repo.get_by_status(ContentStatus.PENDING, limit, offset)
 
 
+@router.get("/in-transit")
+async def get_in_transit_posts(
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PostWithAuthor]:
+    """Get posts currently in-transit through the pneumatic evaluation system (public endpoint)."""
+    post_repo = PostRepository()
+    return await post_repo.get_in_transit_posts(limit, offset)
+
+
 @router.get("/{post_id}")
 async def get_post(post_id: UUID) -> PostWithAuthor:
     """Get a specific post by ID."""
@@ -105,16 +115,23 @@ async def get_post(post_id: UUID) -> PostWithAuthor:
             status_code=status.HTTP_404_NOT_FOUND, detail="Post not found"
         )
 
-    # Only show approved posts to public
-    if post.status != ContentStatus.APPROVED:
+    # Show approved and in-transit posts to public (part of the spectacle)
+    if post.status not in [ContentStatus.APPROVED, ContentStatus.IN_TRANSIT]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Post not found"
         )
 
     # Get post with author info by searching in topic
-    posts_with_author = await post_repo.get_approved_by_topic(post.topic_pk, limit=1000)
+    posts_with_author = await post_repo.get_by_topic(
+        post.topic_pk,
+        status=None,  # Get all statuses to find our specific post
+        limit=1000,
+    )
     for post_with_author in posts_with_author:
-        if post_with_author.pk == post_id:
+        if post_with_author.pk == post_id and post_with_author.status in [
+            ContentStatus.APPROVED,
+            ContentStatus.IN_TRANSIT,
+        ]:
             return post_with_author
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
@@ -136,7 +153,7 @@ async def create_post(
     post_data: PostCreate,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Post:
-    """Create a new post."""
+    """Create a new post with ToS screening checkpoint."""
     post_repo = PostRepository()
 
     # Validate user can create posts (not banned/sanctioned)
@@ -161,7 +178,42 @@ async def create_post(
         submitted_at=datetime.now(UTC),
     )
 
-    return await post_repo.create(post_create)
+    # Create post with PENDING status for ToS screening
+    post = await post_repo.create(post_create)
+
+    # Placeholder ToS screening - always passes for now
+    tos_violation = await _check_tos_violation_placeholder(post.content)
+    if tos_violation:
+        # Reject post immediately for ToS violation
+        update_data = PostUpdate(
+            status=ContentStatus.REJECTED,
+            rejection_reason="Terms of Service violation detected",
+            tos_violation=True,
+        )
+        updated_post = await post_repo.update(post.pk, update_data)
+        if updated_post:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "TOS_VIOLATION",
+                    "message": "Content violates Terms of Service",
+                    "post_id": str(post.pk),
+                },
+            )
+    else:
+        # Pass ToS screening - move to IN_TRANSIT for public visibility
+        update_data = PostUpdate(status=ContentStatus.IN_TRANSIT)
+        updated_post = await post_repo.update(post.pk, update_data)
+        if updated_post:
+            post = updated_post
+
+    return post
+
+
+async def _check_tos_violation_placeholder(content: str) -> bool:
+    """Placeholder ToS violation checker - always passes for now."""
+    # TODO(joshszep): Replace with actual LLM-based ToS screening
+    return False
 
 
 @router.patch("/{post_id}")
