@@ -29,6 +29,13 @@ class TopicCreationQueue(BaseQueueModel):
     topic_pk: UUID
 
 
+class PostTosScreeningQueue(BaseQueueModel):
+    """Post ToS screening queue model."""
+
+    post_pk: UUID
+    topic_pk: UUID
+
+
 class PostModerationQueue(BaseQueueModel):
     """Post moderation queue model."""
 
@@ -60,6 +67,13 @@ class QueueItemCreate(BaseModel):
 class TopicCreationQueueCreate(QueueItemCreate):
     """Topic creation queue item creation model."""
 
+    topic_pk: UUID
+
+
+class PostTosScreeningQueueCreate(QueueItemCreate):
+    """Post ToS screening queue item creation model."""
+
+    post_pk: UUID
     topic_pk: UUID
 
 
@@ -110,6 +124,7 @@ class QueueOverview(BaseModel):
     """Public queue overview statistics."""
 
     topic_creation_queue_length: int
+    post_tos_screening_queue_length: int
     post_moderation_queue_length: int
     private_message_queue_length: int
     average_processing_time_minutes: int | None = None

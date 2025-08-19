@@ -489,6 +489,7 @@ class TestQueueOverviewRepository:
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
             mock_record = {
                 "topic_creation_queue_length": 3,
+                "post_tos_screening_queue_length": 5,
                 "post_moderation_queue_length": 2,
                 "private_message_queue_length": 1,
                 "last_updated": datetime.now(UTC),

@@ -109,7 +109,6 @@ def sample_post_with_author(sample_post):
         submitted_at=sample_post.submitted_at,
         approved_at=sample_post.approved_at,
         rejection_reason=sample_post.rejection_reason,
-        tos_violation=sample_post.tos_violation,
         created_at=sample_post.created_at,
         updated_at=sample_post.updated_at,
     )
@@ -128,7 +127,6 @@ def sample_post_summary(sample_post):
         submitted_at=sample_post.submitted_at,
         approved_at=sample_post.approved_at,
         rejection_reason=sample_post.rejection_reason,
-        tos_violation=sample_post.tos_violation,
     )
 
 
@@ -270,10 +268,48 @@ class TestCreatePost:
     """Test cases for POST /posts/ endpoint."""
 
     @patch("therobotoverlord_api.api.posts.PostRepository")
-    def test_create_post_success(self, mock_repo_class, client, mock_user, sample_post):
+    @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
+    def test_create_post_success(
+        self, mock_tos_check, mock_repo_class, client, mock_user, sample_post
+    ):
         """Test successful post creation."""
+        # Mock ToS check to pass
+        mock_tos_check.return_value = False
+
         mock_repo = AsyncMock()
-        mock_repo.create.return_value = sample_post
+        # Create submitted post for initial creation
+        submitted_post = Post(
+            pk=sample_post.pk,
+            topic_pk=sample_post.topic_pk,
+            parent_post_pk=sample_post.parent_post_pk,
+            author_pk=sample_post.author_pk,
+            content=sample_post.content,
+            status=ContentStatus.SUBMITTED,
+            created_at=sample_post.created_at,
+            updated_at=None,
+            submitted_at=sample_post.submitted_at,
+            approved_at=None,
+            overlord_feedback=None,
+            rejection_reason=None,
+        )
+        # Create in-transit post for after ToS screening
+        in_transit_post = Post(
+            pk=sample_post.pk,
+            topic_pk=sample_post.topic_pk,
+            parent_post_pk=sample_post.parent_post_pk,
+            author_pk=sample_post.author_pk,
+            content=sample_post.content,
+            status=ContentStatus.IN_TRANSIT,
+            created_at=sample_post.created_at,
+            updated_at=sample_post.created_at,
+            submitted_at=sample_post.submitted_at,
+            approved_at=None,
+            overlord_feedback=None,
+            rejection_reason=None,
+        )
+
+        mock_repo.create_from_dict = AsyncMock(return_value=submitted_post)
+        mock_repo.update = AsyncMock(return_value=in_transit_post)
         mock_repo_class.return_value = mock_repo
 
         post_data = {
@@ -291,7 +327,9 @@ class TestCreatePost:
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert data["content"] == sample_post.content
-        mock_repo.create.assert_called_once()
+        assert data["status"] == "in_transit"
+        mock_repo.create_from_dict.assert_called_once()
+        mock_repo.update.assert_called_once()
 
         client.app.dependency_overrides.clear()
 
@@ -619,7 +657,6 @@ class TestChronologicalOrdering:
                 submitted_at=base_time,
                 approved_at=base_time,
                 rejection_reason=None,
-                tos_violation=False,
                 created_at=base_time,
                 updated_at=None,
             ),
@@ -635,7 +672,6 @@ class TestChronologicalOrdering:
                 submitted_at=base_time + timedelta(minutes=1),
                 approved_at=base_time + timedelta(minutes=1),
                 rejection_reason=None,
-                tos_violation=False,
                 created_at=base_time + timedelta(minutes=1),
                 updated_at=None,
             ),
@@ -651,7 +687,6 @@ class TestChronologicalOrdering:
                 submitted_at=base_time + timedelta(minutes=2),
                 approved_at=base_time + timedelta(minutes=2),
                 rejection_reason=None,
-                tos_violation=False,
                 created_at=base_time + timedelta(minutes=2),
                 updated_at=None,
             ),

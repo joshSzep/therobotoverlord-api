@@ -43,6 +43,8 @@ __all__ = [
     "PostModerationQueueCreate",
     "PostSummary",
     "PostThread",
+    "PostTosScreeningQueue",
+    "PostTosScreeningQueueCreate",
     "PostUpdate",
     "PostWithAuthor",
     "PrivateMessageQueue",

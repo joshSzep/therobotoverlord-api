@@ -337,6 +337,7 @@ class QueueOverviewRepository:
         query = """
             SELECT
                 (SELECT COUNT(*) FROM topic_creation_queue WHERE status = 'pending') as topic_creation_queue_length,
+                (SELECT COUNT(*) FROM post_tos_screening_queue WHERE status = 'pending') as post_tos_screening_queue_length,
                 (SELECT COUNT(*) FROM post_moderation_queue WHERE status = 'pending') as post_moderation_queue_length,
                 (SELECT COUNT(*) FROM private_message_queue WHERE status = 'pending') as private_message_queue_length,
                 NOW() as last_updated

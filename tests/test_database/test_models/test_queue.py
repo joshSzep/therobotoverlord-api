@@ -336,6 +336,7 @@ class TestQueueOverview:
         """Test creating QueueOverview instance."""
         queue_overview = QueueOverview(
             topic_creation_queue_length=3,
+            post_tos_screening_queue_length=5,
             post_moderation_queue_length=7,
             private_message_queue_length=2,
             average_processing_time_minutes=12,

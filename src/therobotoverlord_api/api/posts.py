@@ -93,6 +93,16 @@ async def get_pending_posts(
     return await post_repo.get_by_status(ContentStatus.PENDING, limit, offset)
 
 
+@router.get("/submitted")
+async def get_submitted_posts(
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PostWithAuthor]:
+    """Get posts awaiting ToS screening (admin/moderator only)."""
+    post_repo = PostRepository()
+    return await post_repo.get_submitted_posts(limit, offset)
+
+
 @router.get("/in-transit")
 async def get_in_transit_posts(
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
@@ -178,17 +188,19 @@ async def create_post(
         submitted_at=datetime.now(UTC),
     )
 
-    # Create post with PENDING status for ToS screening
-    post = await post_repo.create(post_create)
+    # Create post with SUBMITTED status - awaiting ToS screening queue
+    post_create_data = post_create.model_dump()
+    post_create_data["status"] = ContentStatus.SUBMITTED
+    post = await post_repo.create_from_dict(post_create_data)
 
-    # Placeholder ToS screening - always passes for now
-    tos_violation = await _check_tos_violation_placeholder(post.content)
+    # NOTE: Future enhancement - Add post to ToS screening queue here
+    # For now, simulate immediate ToS processing
+    tos_violation = _check_tos_violation_placeholder(post.content)
     if tos_violation:
         # Reject post immediately for ToS violation
         update_data = PostUpdate(
-            status=ContentStatus.REJECTED,
+            status=ContentStatus.TOS_VIOLATION,
             rejection_reason="Terms of Service violation detected",
-            tos_violation=True,
         )
         updated_post = await post_repo.update(post.pk, update_data)
         if updated_post:
@@ -202,6 +214,7 @@ async def create_post(
             )
     else:
         # Pass ToS screening - move to IN_TRANSIT for public visibility
+        # NOTE: Future enhancement - Add post to full moderation queue here
         update_data = PostUpdate(status=ContentStatus.IN_TRANSIT)
         updated_post = await post_repo.update(post.pk, update_data)
         if updated_post:
@@ -210,9 +223,9 @@ async def create_post(
     return post
 
 
-async def _check_tos_violation_placeholder(content: str) -> bool:
+def _check_tos_violation_placeholder(content: str) -> bool:
     """Placeholder ToS violation checker - always passes for now."""
-    # TODO(joshszep): Replace with actual LLM-based ToS screening
+    # NOTE: Future enhancement - Replace with actual LLM-based ToS screening
     return False
 
 

@@ -211,7 +211,6 @@ class TestPostWithAuthor:
             submitted_at=created_at,
             approved_at=created_at,
             rejection_reason=None,
-            tos_violation=False,
             author_username="testuser",
         )
 
@@ -301,7 +300,6 @@ class TestPostSummary:
             submitted_at=created_at,
             approved_at=created_at,
             rejection_reason=None,
-            tos_violation=False,
         )
 
         assert post_summary.pk == pk
@@ -328,7 +326,6 @@ class TestPostSummary:
             submitted_at=created_at,
             approved_at=None,
             rejection_reason="Content quality issues",
-            tos_violation=False,
         )
 
         assert post_summary.status == ContentStatus.REJECTED

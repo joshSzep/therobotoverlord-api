@@ -22,10 +22,12 @@ class UserRole(str, Enum):
 class ContentStatus(str, Enum):
     """Content status enumeration."""
 
+    SUBMITTED = "submitted"
     PENDING = "pending"
     IN_TRANSIT = "in_transit"
     APPROVED = "approved"
     REJECTED = "rejected"
+    TOS_VIOLATION = "tos_violation"
 
 
 class TopicStatus(str, Enum):

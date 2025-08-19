@@ -56,7 +56,8 @@ class PostRepository(BaseRepository[Post]):
         query = f"""
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE {where_clause}
@@ -77,11 +78,12 @@ class PostRepository(BaseRepository[Post]):
         query = """
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'rejected'
-            ORDER BY p.updated_at DESC
+            ORDER BY p.submitted_at DESC
             LIMIT $1 OFFSET $2
         """
 
@@ -114,14 +116,12 @@ class PostRepository(BaseRepository[Post]):
             SELECT
                 p.pk,
                 p.topic_pk,
-                t.title as topic_title,
+                p.author_pk,
                 p.content,
                 p.status,
-                p.overlord_feedback,
                 p.submitted_at,
-                p.approved_at
+                p.rejection_reason
             FROM posts p
-            JOIN topics t ON p.topic_pk = t.pk
             WHERE {where_clause}
             ORDER BY p.submitted_at DESC
             LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}
@@ -148,7 +148,8 @@ class PostRepository(BaseRepository[Post]):
         query = """
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'rejected' AND p.author_pk = $1
@@ -294,7 +295,8 @@ class PostRepository(BaseRepository[Post]):
         query = """
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'approved'
@@ -324,7 +326,8 @@ class PostRepository(BaseRepository[Post]):
         query = f"""
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE {where_clause}
@@ -345,10 +348,42 @@ class PostRepository(BaseRepository[Post]):
         query = """
             SELECT
                 p.*,
-                u.username as author_username
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'in_transit'
+            ORDER BY p.submitted_at ASC
+            LIMIT $1 OFFSET $2
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit, offset)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
+    async def get_submitted_posts(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[PostWithAuthor]:
+        """Get posts awaiting ToS screening (SUBMITTED status)."""
+        query = """
+            SELECT
+                p.pk,
+                p.created_at,
+                p.updated_at,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.rejection_reason,
+                p.submitted_at,
+                p.approved_at,
+                u.username as author_username,
+                u.avatar_url as author_avatar_url
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            WHERE p.status = 'submitted'
             ORDER BY p.submitted_at ASC
             LIMIT $1 OFFSET $2
         """
