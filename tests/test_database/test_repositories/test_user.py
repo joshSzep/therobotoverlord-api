@@ -185,11 +185,18 @@ class TestUserRepository:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_can_create_topic_true(self, repository, sample_user_pk):
-        """Test can_create_topic when user has sufficient loyalty score."""
-        with patch(
-            "therobotoverlord_api.database.repositories.user.get_db_connection"
-        ) as mock_get_conn:
+    async def test_can_create_topic_true_default_percent(
+        self, repository, sample_user_pk
+    ):
+        """Test can_create_topic when user has sufficient loyalty score (default 10%)."""
+        with (
+            patch.object(
+                repository, "get_top_percent_loyalty_threshold", return_value=50
+            ) as mock_threshold,
+            patch(
+                "therobotoverlord_api.database.repositories.user.get_db_connection"
+            ) as mock_get_conn,
+        ):
             mock_connection = AsyncMock()
             mock_connection.fetchval.return_value = True
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
@@ -197,17 +204,47 @@ class TestUserRepository:
             result = await repository.can_create_topic(sample_user_pk)
 
             assert result is True
-            expected_query = "\n            SELECT loyalty_score >= 100 as can_create\n            FROM users\n            WHERE pk = $1\n        "
+            mock_threshold.assert_called_once_with(0.1)
+            expected_query = "\n            SELECT loyalty_score >= $1 as can_create\n            FROM users\n            WHERE pk = $2\n        "
             mock_connection.fetchval.assert_called_once_with(
-                expected_query, sample_user_pk
+                expected_query, 50, sample_user_pk
+            )
+
+    @pytest.mark.asyncio
+    async def test_can_create_topic_custom_percent(self, repository, sample_user_pk):
+        """Test can_create_topic with custom percentage."""
+        with (
+            patch.object(
+                repository, "get_top_percent_loyalty_threshold", return_value=100
+            ) as mock_threshold,
+            patch(
+                "therobotoverlord_api.database.repositories.user.get_db_connection"
+            ) as mock_get_conn,
+        ):
+            mock_connection = AsyncMock()
+            mock_connection.fetchval.return_value = True
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+            result = await repository.can_create_topic(sample_user_pk, top_percent=0.05)
+
+            assert result is True
+            mock_threshold.assert_called_once_with(0.05)
+            expected_query = "\n            SELECT loyalty_score >= $1 as can_create\n            FROM users\n            WHERE pk = $2\n        "
+            mock_connection.fetchval.assert_called_once_with(
+                expected_query, 100, sample_user_pk
             )
 
     @pytest.mark.asyncio
     async def test_can_create_topic_false(self, repository, sample_user_pk):
         """Test can_create_topic when user has insufficient loyalty score."""
-        with patch(
-            "therobotoverlord_api.database.repositories.user.get_db_connection"
-        ) as mock_get_conn:
+        with (
+            patch.object(
+                repository, "get_top_percent_loyalty_threshold", return_value=50
+            ),
+            patch(
+                "therobotoverlord_api.database.repositories.user.get_db_connection"
+            ) as mock_get_conn,
+        ):
             mock_connection = AsyncMock()
             mock_connection.fetchval.return_value = False
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
@@ -219,9 +256,14 @@ class TestUserRepository:
     @pytest.mark.asyncio
     async def test_can_create_topic_user_not_found(self, repository, sample_user_pk):
         """Test can_create_topic when user not found."""
-        with patch(
-            "therobotoverlord_api.database.repositories.user.get_db_connection"
-        ) as mock_get_conn:
+        with (
+            patch.object(
+                repository, "get_top_percent_loyalty_threshold", return_value=50
+            ),
+            patch(
+                "therobotoverlord_api.database.repositories.user.get_db_connection"
+            ) as mock_get_conn,
+        ):
             mock_connection = AsyncMock()
             mock_connection.fetchval.return_value = None
             mock_get_conn.return_value.__aenter__.return_value = mock_connection
@@ -229,6 +271,112 @@ class TestUserRepository:
             result = await repository.can_create_topic(sample_user_pk)
 
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_top_percent_loyalty_threshold_default(self, repository):
+        """Test get_top_percent_loyalty_threshold with default 10%."""
+        with patch(
+            "therobotoverlord_api.database.repositories.user.get_db_connection"
+        ) as mock_get_conn:
+            mock_connection = AsyncMock()
+            mock_connection.fetchval.return_value = 75
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+            result = await repository.get_top_percent_loyalty_threshold()
+
+            assert result == 75
+            expected_query = "\n            SELECT COALESCE(MIN(loyalty_score), 0) as threshold\n            FROM (\n                SELECT loyalty_score\n                FROM users\n                WHERE loyalty_score > 0\n                ORDER BY loyalty_score DESC, created_at ASC\n                LIMIT (SELECT GREATEST(1, CAST(COUNT(*) * $1 AS INTEGER)) FROM users WHERE loyalty_score > 0)\n            ) top_users\n        "
+            mock_connection.fetchval.assert_called_once_with(expected_query, 0.1)
+
+    @pytest.mark.asyncio
+    async def test_get_top_percent_loyalty_threshold_custom(self, repository):
+        """Test get_top_percent_loyalty_threshold with custom percentage."""
+        with patch(
+            "therobotoverlord_api.database.repositories.user.get_db_connection"
+        ) as mock_get_conn:
+            mock_connection = AsyncMock()
+            mock_connection.fetchval.return_value = 150
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+            result = await repository.get_top_percent_loyalty_threshold(0.05)
+
+            assert result == 150
+            expected_query = "\n            SELECT COALESCE(MIN(loyalty_score), 0) as threshold\n            FROM (\n                SELECT loyalty_score\n                FROM users\n                WHERE loyalty_score > 0\n                ORDER BY loyalty_score DESC, created_at ASC\n                LIMIT (SELECT GREATEST(1, CAST(COUNT(*) * $1 AS INTEGER)) FROM users WHERE loyalty_score > 0)\n            ) top_users\n        "
+            mock_connection.fetchval.assert_called_once_with(expected_query, 0.05)
+
+    @pytest.mark.asyncio
+    async def test_get_top_percent_loyalty_threshold_no_users(self, repository):
+        """Test get_top_percent_loyalty_threshold when no users exist."""
+        with patch(
+            "therobotoverlord_api.database.repositories.user.get_db_connection"
+        ) as mock_get_conn:
+            mock_connection = AsyncMock()
+            mock_connection.fetchval.return_value = None
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+            result = await repository.get_top_percent_loyalty_threshold()
+
+            assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_get_top_percent_loyalty_threshold_edge_cases(self, repository):
+        """Test get_top_percent_loyalty_threshold with edge case percentages."""
+        with patch(
+            "therobotoverlord_api.database.repositories.user.get_db_connection"
+        ) as mock_get_conn:
+            mock_connection = AsyncMock()
+            mock_connection.fetchval.return_value = 200
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+            # Test top 1%
+            result = await repository.get_top_percent_loyalty_threshold(0.01)
+            assert result == 200
+
+            # Test top 50%
+            mock_connection.fetchval.return_value = 25
+            result = await repository.get_top_percent_loyalty_threshold(0.5)
+            assert result == 25
+
+            # Test top 100% (should include everyone)
+            mock_connection.fetchval.return_value = 1
+            result = await repository.get_top_percent_loyalty_threshold(1.0)
+            assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_can_create_topic_various_percentages(
+        self, repository, sample_user_pk
+    ):
+        """Test can_create_topic with various percentage thresholds."""
+        test_cases = [
+            (0.01, 500),  # Top 1%, very high threshold
+            (0.05, 200),  # Top 5%, high threshold
+            (0.2, 50),  # Top 20%, moderate threshold
+            (0.5, 10),  # Top 50%, low threshold
+        ]
+
+        for percent, threshold in test_cases:
+            with (
+                patch.object(
+                    repository,
+                    "get_top_percent_loyalty_threshold",
+                    return_value=threshold,
+                ) as mock_threshold,
+                patch(
+                    "therobotoverlord_api.database.repositories.user.get_db_connection"
+                ) as mock_get_conn,
+            ):
+                mock_connection = AsyncMock()
+                mock_connection.fetchval.return_value = True
+                mock_get_conn.return_value.__aenter__.return_value = mock_connection
+
+                result = await repository.can_create_topic(sample_user_pk, percent)
+
+                assert result is True
+                mock_threshold.assert_called_once_with(percent)
+                expected_query = "\n            SELECT loyalty_score >= $1 as can_create\n            FROM users\n            WHERE pk = $2\n        "
+                mock_connection.fetchval.assert_called_once_with(
+                    expected_query, threshold, sample_user_pk
+                )
 
     @pytest.mark.asyncio
     async def test_get_top_users(self, repository):

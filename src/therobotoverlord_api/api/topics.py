@@ -19,6 +19,7 @@ from therobotoverlord_api.database.models.topic import TopicSummary
 from therobotoverlord_api.database.models.topic import TopicWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.topic import TopicRepository
+from therobotoverlord_api.database.repositories.user import UserRepository
 
 router = APIRouter(prefix="/topics", tags=["topics"])
 
@@ -66,12 +67,18 @@ async def create_topic(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Topic:
     """Create a new topic (requires authentication)."""
-    # Check if user can create topics (loyalty score threshold)
-    if current_user.loyalty_score < 10 and current_user.role == UserRole.CITIZEN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient loyalty score to create topics. Minimum required: 10",
-        )
+    # Check if user can create topics (top N% loyalty score for citizens)
+    if current_user.role == UserRole.CITIZEN:
+        user_repo = UserRepository()
+        top_percent = 0.1  # 10% - configurable for future experimentation
+        can_create = await user_repo.can_create_topic(current_user.pk, top_percent)
+        if not can_create:
+            threshold = await user_repo.get_top_percent_loyalty_threshold(top_percent)
+            percent_display = int(top_percent * 100)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient loyalty score to create topics. You must be in the top {percent_display}% of citizens (minimum score: {threshold}). Your current score: {current_user.loyalty_score}",
+            )
 
     # Set the author
     topic_data.author_pk = current_user.pk

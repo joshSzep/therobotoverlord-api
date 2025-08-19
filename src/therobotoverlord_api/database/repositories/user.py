@@ -78,17 +78,40 @@ class UserRepository(BaseRepository[User]):
         async with get_db_connection() as connection:
             return await connection.fetchval(query, user_pk)
 
-    async def can_create_topic(self, user_pk: UUID) -> bool:
-        """Check if user can create topics based on loyalty score."""
+    async def can_create_topic(self, user_pk: UUID, top_percent: float = 0.1) -> bool:
+        """Check if user can create topics based on top N% loyalty score."""
+        threshold = await self.get_top_percent_loyalty_threshold(top_percent)
+
         query = """
-            SELECT loyalty_score >= 100 as can_create
+            SELECT loyalty_score >= $1 as can_create
             FROM users
-            WHERE pk = $1
+            WHERE pk = $2
         """
 
         async with get_db_connection() as connection:
-            result = await connection.fetchval(query, user_pk)
+            result = await connection.fetchval(query, threshold, user_pk)
             return result or False
+
+    async def get_top_percent_loyalty_threshold(self, top_percent: float = 0.1) -> int:
+        """Get the minimum loyalty score required to be in the top N%.
+
+        Args:
+            top_percent: The percentage as a decimal (0.1 for 10%, 0.05 for 5%, etc.)
+        """
+        query = """
+            SELECT COALESCE(MIN(loyalty_score), 0) as threshold
+            FROM (
+                SELECT loyalty_score
+                FROM users
+                WHERE loyalty_score > 0
+                ORDER BY loyalty_score DESC, created_at ASC
+                LIMIT (SELECT GREATEST(1, CAST(COUNT(*) * $1 AS INTEGER)) FROM users WHERE loyalty_score > 0)
+            ) top_users
+        """
+
+        async with get_db_connection() as connection:
+            result = await connection.fetchval(query, top_percent)
+            return result or 0
 
     async def get_top_users(self, limit: int = 10) -> list[UserProfile]:
         """Get top users by loyalty score."""

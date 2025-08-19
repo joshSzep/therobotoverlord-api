@@ -204,14 +204,26 @@ class TestGetTopic:
 class TestCreateTopic:
     """Test cases for POST /topics/ endpoint."""
 
+    @patch("therobotoverlord_api.api.topics.UserRepository")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_create_topic_success(
-        self, mock_repo_class, client, mock_user, sample_topic
+        self,
+        mock_topic_repo_class,
+        mock_user_repo_class,
+        client,
+        mock_user,
+        sample_topic,
     ):
         """Test successful topic creation."""
-        mock_repo = AsyncMock()
-        mock_repo.create.return_value = sample_topic
-        mock_repo_class.return_value = mock_repo
+        mock_user.loyalty_score = 100  # High enough loyalty score
+
+        mock_topic_repo = AsyncMock()
+        mock_topic_repo.create.return_value = sample_topic
+        mock_topic_repo_class.return_value = mock_topic_repo
+
+        mock_user_repo = AsyncMock()
+        mock_user_repo.can_create_topic.return_value = True
+        mock_user_repo_class.return_value = mock_user_repo
 
         topic_data = {
             "title": "New Topic",
@@ -226,14 +238,23 @@ class TestCreateTopic:
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
         assert data["title"] == sample_topic.title
-        mock_repo.create.assert_called_once()
+        mock_topic_repo.create.assert_called_once()
+        mock_user_repo.can_create_topic.assert_called_once_with(mock_user.pk, 0.1)
 
         # Clean up
         client.app.dependency_overrides.clear()
 
-    def test_create_topic_insufficient_loyalty(self, client, mock_user):
+    @patch("therobotoverlord_api.api.topics.UserRepository")
+    def test_create_topic_insufficient_loyalty(
+        self, mock_user_repo_class, client, mock_user
+    ):
         """Test topic creation with insufficient loyalty score."""
-        mock_user.loyalty_score = 5  # Below threshold of 10
+        mock_user.loyalty_score = 5  # Below threshold
+
+        mock_user_repo = AsyncMock()
+        mock_user_repo.can_create_topic.return_value = False
+        mock_user_repo.get_top_percent_loyalty_threshold.return_value = 75
+        mock_user_repo_class.return_value = mock_user_repo
 
         topic_data = {
             "title": "New Topic",
@@ -246,7 +267,14 @@ class TestCreateTopic:
         response = client.post("/api/v1/topics/", json=topic_data)
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "Insufficient loyalty score" in response.json()["detail"]
+        response_detail = response.json()["detail"]
+        assert "Insufficient loyalty score" in response_detail
+        assert "top 10%" in response_detail
+        assert "minimum score: 75" in response_detail
+        assert "Your current score: 5" in response_detail
+
+        mock_user_repo.can_create_topic.assert_called_once_with(mock_user.pk, 0.1)
+        mock_user_repo.get_top_percent_loyalty_threshold.assert_called_once_with(0.1)
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -393,6 +421,7 @@ class TestBusinessLogic:
         response = client.post("/api/v1/topics/", json=topic_data)
 
         assert response.status_code == status.HTTP_201_CREATED
+        # Note: No UserRepository should be called for non-citizens
 
         # Clean up
         client.app.dependency_overrides.clear()
