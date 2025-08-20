@@ -18,9 +18,13 @@ from therobotoverlord_api.database.models.appeal import AppealResponse
 from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealWithContent
+from therobotoverlord_api.database.models.appeal_with_editing import (
+    AppealDecisionWithEdit,
+)
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.services.appeal_service import AppealService
+from therobotoverlord_api.services.content_versioning_service import ContentVersioningService
 
 router = APIRouter(prefix="/appeals", tags=["appeals"])
 
@@ -28,6 +32,11 @@ router = APIRouter(prefix="/appeals", tags=["appeals"])
 def get_appeal_service() -> AppealService:
     """Get appeal service instance."""
     return AppealService()
+
+
+def get_content_versioning_service() -> ContentVersioningService:
+    """Get content versioning service instance."""
+    return ContentVersioningService()
 
 
 # User-facing endpoints
@@ -230,6 +239,47 @@ async def deny_appeal(
     return {"message": "Appeal denied successfully"}
 
 
+@router.patch("/queue/{appeal_pk}/sustain-with-edit", response_model=dict[str, str])
+async def sustain_appeal_with_edit(
+    appeal_pk: UUID,
+    decision_data: AppealDecisionWithEdit,
+    current_user: Annotated[User, Depends(require_moderator)],
+    appeal_service: Annotated[AppealService, Depends(get_appeal_service)],
+    edited_content: dict[str, str | None] | None = None,
+):
+    """Sustain (grant) an appeal with optional content editing."""
+    success, error = await appeal_service.decide_appeal_with_edit(
+        appeal_pk,
+        current_user.pk,
+        AppealStatus.SUSTAINED,
+        decision_data,
+        edited_content,
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return {"message": "Appeal sustained with content restoration"}
+
+
+@router.patch("/queue/{appeal_pk}/deny-with-edit", response_model=dict[str, str])
+async def deny_appeal_with_edit(
+    appeal_pk: UUID,
+    decision_data: AppealDecisionWithEdit,
+    current_user: Annotated[User, Depends(require_moderator)],
+    appeal_service: Annotated[AppealService, Depends(get_appeal_service)],
+):
+    """Deny an appeal with detailed reasoning."""
+    success, error = await appeal_service.decide_appeal_with_edit(
+        appeal_pk, current_user.pk, AppealStatus.DENIED, decision_data
+    )
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return {"message": "Appeal denied"}
+
+
 @router.get("/stats", response_model=AppealStats)
 async def get_appeal_statistics(
     current_user: Annotated[User, Depends(require_moderator)],
@@ -252,3 +302,40 @@ async def get_user_appeals_admin(
 ):
     """Get appeals for a specific user (admin/moderator only)."""
     return await appeal_service.get_user_appeals(user_pk, status, page, page_size)
+
+
+@router.get("/content-versions/{content_pk}/history", response_model=list)
+async def get_content_version_history(
+    content_pk: UUID,
+    current_user: Annotated[User, Depends(require_moderator)],
+    versioning_service: Annotated[ContentVersioningService, Depends(get_content_versioning_service)],
+):
+    """Get version history for content (moderator only)."""
+    return await versioning_service.get_content_history(content_pk)
+
+
+@router.get("/content-versions/{content_pk}/{version_number}/diff")
+async def get_content_version_diff(
+    content_pk: UUID,
+    version_number: int,
+    current_user: Annotated[User, Depends(require_moderator)],
+    versioning_service: Annotated[ContentVersioningService, Depends(get_content_versioning_service)],
+):
+    """Get diff between content versions (moderator only)."""
+    # Get content history to find the version by number
+    history = await versioning_service.get_content_history(content_pk)
+    version = next((v for v in history if v.version_number == version_number), None)
+
+    if not version:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Version diff not found"
+        )
+
+    diff = await versioning_service.get_version_diff(version.pk)
+
+    if not diff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Version diff not found"
+        )
+
+    return diff

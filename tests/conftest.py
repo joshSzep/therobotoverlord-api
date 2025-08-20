@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 
 from asyncpg import Record
+from fastapi.testclient import TestClient
 
 from therobotoverlord_api.config.database import DatabaseSettings
 from therobotoverlord_api.database.models.base import UserRole
@@ -207,3 +208,22 @@ def mock_records(sample_user_data) -> list[Record]:
         records.append(record)
 
     return records
+
+
+@pytest.fixture
+def client():
+    """FastAPI test client."""
+    from therobotoverlord_api.main import app
+    return TestClient(app)
+
+
+@pytest.fixture
+def get_appeal_service():
+    """Mock get_appeal_service dependency."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def require_moderator():
+    """Mock require_moderator dependency."""
+    return MagicMock(pk=uuid4(), role="moderator")

@@ -13,8 +13,17 @@ from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealUpdate
 from therobotoverlord_api.database.models.appeal import AppealWithContent
+from therobotoverlord_api.database.models.appeal_with_editing import (
+    AppealDecisionWithEdit,
+)
+from therobotoverlord_api.database.models.appeal_with_editing import (
+    AppealUpdateWithRestoration,
+)
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.repositories.appeal import AppealRepository
+from therobotoverlord_api.services.content_restoration_service import (
+    ContentRestorationService,
+)
 from therobotoverlord_api.services.loyalty_score_service import LoyaltyScoreService
 from therobotoverlord_api.services.queue_service import QueueService
 
@@ -27,10 +36,12 @@ class AppealService:
         appeal_repository: AppealRepository | None = None,
         loyalty_score_service: LoyaltyScoreService | None = None,
         queue_service: QueueService | None = None,
+        content_restoration_service: ContentRestorationService | None = None,
     ):
         self.appeal_repository = appeal_repository or AppealRepository()
         self.loyalty_score_service = loyalty_score_service or LoyaltyScoreService()
         self.queue_service = queue_service or QueueService()
+        self.content_restoration_service = content_restoration_service or ContentRestorationService()
 
     async def submit_appeal(
         self, user_pk: UUID, appeal_data: AppealCreate
@@ -206,7 +217,7 @@ class AppealService:
 
         # Check if appeal is under review
         if appeal.status != AppealStatus.UNDER_REVIEW:
-            return False, f"Appeal is not under review (status: {appeal.status.value})"
+            return False, f"Appeal is not under review (status: {appeal.status})"
 
         # Update appeal with decision
         now = datetime.now(UTC)
@@ -222,6 +233,53 @@ class AppealService:
 
         # Process the decision consequences
         await self._process_appeal_decision(appeal, decision, reviewer_pk)
+
+        return True, ""
+
+    async def decide_appeal_with_edit(
+        self,
+        appeal_pk: UUID,
+        reviewer_pk: UUID,
+        decision: AppealStatus,
+        decision_data: AppealDecisionWithEdit,
+        edited_content: dict[str, str | None] | None = None,
+    ) -> tuple[bool, str]:
+        """Make a decision on an appeal with optional content editing."""
+
+        if decision not in [AppealStatus.SUSTAINED, AppealStatus.DENIED]:
+            return False, "Decision must be either SUSTAINED or DENIED"
+
+        # Get the appeal
+        appeal = await self.appeal_repository.get(appeal_pk)
+        if not appeal:
+            return False, "Appeal not found"
+
+        # Verify reviewer assignment and status
+        if appeal.reviewed_by != reviewer_pk:
+            return False, "You are not assigned to review this appeal"
+
+        if appeal.status != AppealStatus.UNDER_REVIEW:
+            return False, f"Appeal is not under review (status: {appeal.status})"
+
+        # Update appeal with decision
+        now = datetime.now(UTC)
+        update_data = AppealUpdate(
+            status=decision,
+            decision_reason=decision_data.decision_reason,
+            review_notes=decision_data.review_notes,
+            reviewed_at=now,
+            reviewed_by=reviewer_pk,
+        )
+
+        await self.appeal_repository.update_appeal(appeal_pk, update_data)
+
+        # Process the decision with editing capability
+        if decision == AppealStatus.SUSTAINED:
+            await self._process_sustained_appeal_with_edit(
+                appeal, reviewer_pk, edited_content, decision_data.edit_reason
+            )
+        elif decision == AppealStatus.DENIED:
+            await self._process_denied_appeal(appeal)
 
         return True, ""
 
@@ -277,6 +335,57 @@ class AppealService:
 
         # TODO(josh): Consider moderator feedback/training
         # Track moderation accuracy for quality improvement
+
+    async def _process_sustained_appeal_with_edit(
+        self,
+        appeal: Appeal,
+        reviewer_pk: UUID,
+        edited_content: dict[str, str | None] | None = None,
+        edit_reason: str | None = None,
+    ) -> None:
+        """Process a sustained appeal with optional content editing."""
+
+        # 1. Award loyalty points (existing)
+        await self.loyalty_score_service.record_appeal_outcome(
+            user_pk=appeal.appellant_pk,
+            appeal_pk=appeal.pk,
+            outcome="sustained",
+            points_awarded=50,
+        )
+
+        # 2. Restore content with edits (NEW)
+        restoration_result = await self.content_restoration_service.restore_with_edits(
+            content_type=appeal.content_type,
+            content_pk=appeal.content_pk,
+            appeal=appeal,
+            reviewer_pk=reviewer_pk,
+            edited_content=edited_content,
+            edit_reason=edit_reason,
+        )
+
+        # 3. Update appeal with restoration info
+        if restoration_result.success:
+            update_data = AppealUpdateWithRestoration(
+                restoration_completed=True,
+                restoration_completed_at=datetime.now(UTC).isoformat(),
+                restoration_metadata={
+                    "content_edited": bool(edited_content),
+                    "version_pk": str(restoration_result.version_pk)
+                    if restoration_result.version_pk
+                    else None,
+                    "restoration_pk": str(restoration_result.restoration_pk)
+                    if restoration_result.restoration_pk
+                    else None,
+                },
+            )
+
+            # Update appeal record with restoration metadata
+            await self.appeal_repository.update_from_dict(
+                appeal.pk, update_data.model_dump(exclude_none=True)
+            )
+
+        # 4. Send notifications about restoration and any edits
+        # TODO(josh): Implement notification service integration
 
     async def _process_denied_appeal(self, appeal: Appeal) -> None:
         """

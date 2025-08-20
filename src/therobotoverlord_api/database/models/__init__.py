@@ -6,6 +6,15 @@ from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.base import QueueStatus
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.content_version import ContentRestoration
+from therobotoverlord_api.database.models.content_version import (
+    ContentRestorationCreate,
+)
+from therobotoverlord_api.database.models.content_version import ContentVersion
+from therobotoverlord_api.database.models.content_version import ContentVersionCreate
+from therobotoverlord_api.database.models.content_version import ContentVersionDiff
+from therobotoverlord_api.database.models.content_version import ContentVersionSummary
+from therobotoverlord_api.database.models.content_version import RestorationResult
 from therobotoverlord_api.database.models.loyalty_score import (
     ContentType as LoyaltyContentType,
 )
@@ -58,8 +67,14 @@ from therobotoverlord_api.database.models.user import UserUpdate
 
 __all__ = [
     "BaseDBModel",
+    "ContentRestoration",
+    "ContentRestorationCreate",
     "ContentStatus",
     "ContentType",
+    "ContentVersion",
+    "ContentVersionCreate",
+    "ContentVersionDiff",
+    "ContentVersionSummary",
     "ConversationSummary",
     "LoyaltyContentType",
     "LoyaltyEventFilters",
@@ -92,6 +107,7 @@ __all__ = [
     "QueueStatus",
     "QueueStatusInfo",
     "QueueWithContent",
+    "RestorationResult",
     "Topic",
     "TopicCreate",
     "TopicCreationQueue",
