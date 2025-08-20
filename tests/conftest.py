@@ -17,6 +17,7 @@ from therobotoverlord_api.config.database import DatabaseSettings
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.models.user import UserCreate
+from therobotoverlord_api.main import app
 
 
 @pytest.fixture(scope="session")
@@ -213,7 +214,6 @@ def mock_records(sample_user_data) -> list[Record]:
 @pytest.fixture
 def client():
     """FastAPI test client."""
-    from therobotoverlord_api.main import app
     return TestClient(app)
 
 

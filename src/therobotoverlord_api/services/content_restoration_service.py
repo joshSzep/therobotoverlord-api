@@ -5,13 +5,14 @@ from datetime import datetime
 from uuid import UUID
 
 from therobotoverlord_api.database.models.appeal import Appeal
+from therobotoverlord_api.database.models.base import ContentStatus
+from therobotoverlord_api.database.models.base import ContentType
+from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.content_version import ContentRestoration
 from therobotoverlord_api.database.models.content_version import (
     ContentRestorationCreate,
 )
 from therobotoverlord_api.database.models.content_version import RestorationResult
-from therobotoverlord_api.database.models.base import ContentStatus
-from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.post import PostUpdate
 from therobotoverlord_api.database.models.private_message import PrivateMessageUpdate
 from therobotoverlord_api.database.models.topic import TopicUpdate
@@ -30,7 +31,6 @@ from therobotoverlord_api.services.content_versioning_service import (
 
 class ContentNotFoundError(Exception):
     """Raised when content to be restored is not found."""
-
 
 
 class ContentRestorationService:
@@ -82,7 +82,10 @@ class ContentRestorationService:
             # 3. Apply content changes (use edited version if provided)
             final_content = edited_content if edited_content else original_content
             restored_content = await self._restore_content_with_data(
-                content_type, content_pk, final_content, original_content["status"]
+                content_type,
+                content_pk,
+                final_content,
+                original_content["status"] or "unknown",
             )
 
             if not restored_content:
@@ -103,7 +106,7 @@ class ContentRestorationService:
                 restored_by=reviewer_pk,
                 content_was_edited=bool(edited_content),
                 edit_summary=edit_reason,
-                original_status=original_content["status"],
+                original_status=original_content["status"] or "unknown",
                 restored_status=ContentStatus.APPROVED.value,
             )
 
@@ -200,7 +203,6 @@ class ContentRestorationService:
             content=content_data["content"],
             status=ContentStatus.APPROVED,
             approved_at=datetime.now(UTC),
-            overlord_feedback=None,  # Clear previous rejection feedback
             rejection_reason=None,
         )
 
@@ -215,7 +217,7 @@ class ContentRestorationService:
         update_data = TopicUpdate(
             title=content_data.get("title"),
             description=content_data.get("description"),
-            status=ContentStatus.APPROVED,
+            status=TopicStatus.APPROVED,
             approved_at=datetime.now(UTC),
         )
 
@@ -230,7 +232,6 @@ class ContentRestorationService:
         update_data = PrivateMessageUpdate(
             content=content_data["content"],
             status=ContentStatus.APPROVED,
-            overlord_feedback=None,  # Clear previous rejection feedback
         )
 
         restored_message = await self.message_repository.update(message_pk, update_data)
@@ -243,6 +244,7 @@ class ContentRestorationService:
         content_pk: UUID,
         content_version_pk: UUID,
         restored_by: UUID,
+        *,
         content_was_edited: bool,
         edit_summary: str | None,
         original_status: str,

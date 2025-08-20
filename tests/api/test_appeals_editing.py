@@ -11,21 +11,21 @@ from fastapi import FastAPI
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from therobotoverlord_api.api.appeals import get_appeal_service
+from therobotoverlord_api.api.appeals import get_content_versioning_service
+from therobotoverlord_api.api.appeals import router as appeals_router
+from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.dependencies import require_moderator
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal_with_editing import (
     AppealDecisionWithEdit,
 )
+from therobotoverlord_api.database.models.base import ContentType
+from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.content_version import ContentVersion
 from therobotoverlord_api.database.models.content_version import ContentVersionDiff
 from therobotoverlord_api.database.models.content_version import ContentVersionSummary
-from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
-from therobotoverlord_api.api.appeals import get_appeal_service
-from therobotoverlord_api.api.appeals import get_content_versioning_service
-from therobotoverlord_api.auth.dependencies import get_current_user
-from therobotoverlord_api.auth.dependencies import require_moderator
-from therobotoverlord_api.services.content_versioning_service import ContentVersioningService
-from therobotoverlord_api.api.appeals import router as appeals_router
 
 
 class TestAppealsEditingAPI:
@@ -158,6 +158,7 @@ class TestAppealsEditingAPI:
         decision_data = {
             "decision_reason": "Appeal lacks merit and content violates guidelines",
             "review_notes": "Content violates community guidelines",
+            "edit_content": False,
         }
 
         mock_appeal_service.decide_appeal_with_edit.return_value = (True, "")
@@ -195,22 +196,20 @@ class TestAppealsEditingAPI:
             ContentVersionSummary(
                 pk=uuid4(),
                 content_pk=content_pk,
-                content_type="post",
+                content_type=ContentType.POST,
                 version_number=1,
-                editor_name="Moderator 1",
                 edit_reason="Initial version",
                 edit_type="appeal_restoration",
-                created_at="2024-01-01T00:00:00Z",
+                created_at=datetime.fromisoformat("2024-01-01T00:00:00+00:00"),
             ),
             ContentVersionSummary(
                 pk=uuid4(),
                 content_pk=content_pk,
-                content_type="post",
+                content_type=ContentType.POST,
                 version_number=2,
-                editor_name="Moderator 2",
                 edit_reason="Grammar fixes",
                 edit_type="appeal_restoration",
-                created_at="2024-01-02T00:00:00Z",
+                created_at=datetime.fromisoformat("2024-01-02T00:00:00+00:00"),
             ),
         ]
 
@@ -220,7 +219,9 @@ class TestAppealsEditingAPI:
         def get_versioning_service():
             return mock_versioning_service
 
-        test_app.dependency_overrides[get_content_versioning_service] = get_versioning_service
+        test_app.dependency_overrides[get_content_versioning_service] = (
+            get_versioning_service
+        )
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user
 
@@ -244,36 +245,36 @@ class TestAppealsEditingAPI:
         mock_diff = ContentVersionDiff(
             version_pk=uuid4(),
             content_pk=content_pk,
-            content_type="post",
+            content_type=ContentType.POST,
             version_number=version_number,
-            previous_version=1,
             changes={
                 "title": {"old": "Original", "new": "Edited"},
                 "body": {"old": "Original content", "new": "Edited content"},
             },
-            edit_reason="Grammar fixes",
-            editor_name="Moderator 1",
         )
 
         mock_versioning_service.get_version_diff.return_value = mock_diff
         mock_versioning_service.get_content_history.return_value = [
             ContentVersion(
                 pk=uuid4(),
-                content_type="post",
+                content_type=ContentType.POST,
                 content_pk=content_pk,
                 version_number=version_number,
                 original_content="Original content",
                 edited_content="Edited content",
                 edit_reason="Grammar fixes",
                 edit_type="appeal_restoration",
-                created_at="2024-01-01T00:00:00Z",
+                created_at=datetime.fromisoformat("2024-01-01T00:00:00+00:00"),
+                updated_at=None,
             )
         ]
 
         def get_versioning_service():
             return mock_versioning_service
-        
-        test_app.dependency_overrides[get_content_versioning_service] = get_versioning_service
+
+        test_app.dependency_overrides[get_content_versioning_service] = (
+            get_versioning_service
+        )
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user
 
@@ -304,8 +305,10 @@ class TestAppealsEditingAPI:
 
         def get_versioning_service():
             return mock_versioning_service
-        
-        test_app.dependency_overrides[get_content_versioning_service] = get_versioning_service
+
+        test_app.dependency_overrides[get_content_versioning_service] = (
+            get_versioning_service
+        )
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user
 

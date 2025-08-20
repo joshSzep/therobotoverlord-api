@@ -1,5 +1,6 @@
 """Tests for ContentVersioningService."""
 
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from uuid import uuid4
@@ -41,6 +42,7 @@ class TestContentVersioningService:
             content_type=ContentType.POST,
             content_pk=content_pk,
             original_content="Original content",
+            original_description="Original description",
             edited_title="Edited Title",
             edited_content="Edited content",
             edited_description="Edited description",
@@ -58,8 +60,15 @@ class TestContentVersioningService:
         result = await service.create_version(
             content_type=ContentType.POST,
             content_pk=content_pk,
-            original_content={"content": "Original content"},
-            edited_content={"title": "Edited Title", "content": "Edited content", "description": "Edited description"},
+            original_content={
+                "content": "Original content",
+                "description": "Original description",
+            },
+            edited_content={
+                "title": "Edited Title",
+                "content": "Edited content",
+                "description": "Edited description",
+            },
             edited_by=editor_pk,
             edit_reason="Fixed grammar issues",
             edit_type="appeal_restoration",
@@ -84,7 +93,7 @@ class TestContentVersioningService:
                 edit_reason="Initial version",
                 edit_type="appeal_restoration",
                 appeal_pk=uuid4(),
-                created_at="2024-01-01T00:00:00Z",
+                created_at=datetime.fromisoformat("2024-01-01T00:00:00+00:00"),
                 has_title_change=False,
                 has_content_change=True,
                 has_description_change=False,
@@ -98,7 +107,7 @@ class TestContentVersioningService:
                 edit_reason="Grammar fixes",
                 edit_type="appeal_restoration",
                 appeal_pk=uuid4(),
-                created_at="2024-01-02T00:00:00Z",
+                created_at=datetime.fromisoformat("2024-01-02T00:00:00+00:00"),
                 has_title_change=True,
                 has_content_change=True,
                 has_description_change=False,
@@ -158,7 +167,7 @@ class TestContentVersioningService:
             edit_reason="Grammar fixes",
             edit_type="appeal_restoration",
             appeal_pk=uuid4(),
-            created_at="2024-01-01T00:00:00Z",
+            created_at=datetime.fromisoformat("2024-01-01T00:00:00+00:00"),
             has_title_change=True,
             has_content_change=False,
             has_description_change=False,
@@ -184,7 +193,7 @@ class TestContentVersioningService:
             edit_reason="Initial version",
             edit_type="appeal_restoration",
             appeal_pk=uuid4(),
-            created_at="2024-01-01T00:00:00Z",
+            created_at=datetime.fromisoformat("2024-01-01T00:00:00+00:00"),
             has_title_change=False,
             has_content_change=False,
             has_description_change=False,

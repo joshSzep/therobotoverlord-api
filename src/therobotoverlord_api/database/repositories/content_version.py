@@ -4,15 +4,12 @@ from datetime import datetime
 from uuid import UUID
 
 from therobotoverlord_api.database.connection import get_db_connection
+from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.content_version import ContentRestoration
-from therobotoverlord_api.database.models.content_version import (
-    ContentRestorationCreate,
-)
 from therobotoverlord_api.database.models.content_version import ContentVersion
 from therobotoverlord_api.database.models.content_version import ContentVersionCreate
 from therobotoverlord_api.database.models.content_version import ContentVersionDiff
 from therobotoverlord_api.database.models.content_version import ContentVersionSummary
-from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.repositories.base import BaseRepository
 
 

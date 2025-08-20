@@ -3,7 +3,6 @@
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import AsyncMock
-from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -15,9 +14,7 @@ from therobotoverlord_api.database.models.appeal_with_editing import (
     AppealDecisionWithEdit,
 )
 from therobotoverlord_api.database.models.base import ContentType
-from therobotoverlord_api.database.models.content_version import (
-    RestorationResult,
-)
+from therobotoverlord_api.database.models.content_version import RestorationResult
 from therobotoverlord_api.services.appeal_service import AppealService
 
 
@@ -65,7 +62,7 @@ class TestAppealServiceEditing:
             submitted_at=datetime.now(UTC),
         )
         # Store reviewer_pk as an attribute for tests to use
-        appeal._test_reviewer_pk = reviewer_pk
+        appeal._test_reviewer_pk = reviewer_pk  # type: ignore[attr-defined]
         return appeal
 
     @pytest.mark.asyncio
@@ -82,6 +79,10 @@ class TestAppealServiceEditing:
         decision_data = AppealDecisionWithEdit(
             decision_reason="Appeal is valid",
             review_notes="Content was incorrectly flagged",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
             edit_reason=None,
         )
 
@@ -136,6 +137,10 @@ class TestAppealServiceEditing:
         decision_data = AppealDecisionWithEdit(
             decision_reason="Appeal is valid but content needs editing",
             review_notes="Fixed inappropriate language",
+            edit_content=True,
+            edited_title="Edited Title",
+            edited_content="Edited content",
+            edited_description="Edited description",
             edit_reason="Removed offensive terms",
         )
 
@@ -179,8 +184,12 @@ class TestAppealServiceEditing:
         """Test denying appeal with detailed reasoning."""
         reviewer_pk = sample_appeal._test_reviewer_pk
         decision_data = AppealDecisionWithEdit(
-            decision_reason="Appeal is not valid",
-            review_notes="Content clearly violates community guidelines",
+            decision_reason="Appeal denied",
+            review_notes="Content violates community guidelines",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
             edit_reason=None,
         )
 
@@ -212,7 +221,13 @@ class TestAppealServiceEditing:
         """Test invalid decision status."""
         reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason", review_notes="Test", edit_reason=None
+            decision_reason="This is a test decision reason",
+            review_notes="Test",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
+            edit_reason=None,
         )
 
         success, error = await service.decide_appeal_with_edit(
@@ -233,7 +248,13 @@ class TestAppealServiceEditing:
         appeal_pk = uuid4()
         reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason", review_notes="Test", edit_reason=None
+            decision_reason="This is a test decision reason",
+            review_notes="Test",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
+            edit_reason=None,
         )
 
         mock_appeal_repo.get.return_value = None
@@ -255,7 +276,13 @@ class TestAppealServiceEditing:
         """Test wrong reviewer assigned."""
         wrong_reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason", review_notes="Test", edit_reason=None
+            decision_reason="This is a test decision reason",
+            review_notes="Test",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
+            edit_reason=None,
         )
 
         mock_appeal_repo.get.return_value = sample_appeal
@@ -289,7 +316,13 @@ class TestAppealServiceEditing:
         )
 
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason", review_notes="Test", edit_reason=None
+            decision_reason="This is a test decision reason",
+            review_notes="Test",
+            edit_content=False,
+            edited_title=None,
+            edited_content=None,
+            edited_description=None,
+            edit_reason=None,
         )
 
         mock_appeal_repo.get.return_value = appeal

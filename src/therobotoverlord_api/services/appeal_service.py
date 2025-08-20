@@ -41,7 +41,9 @@ class AppealService:
         self.appeal_repository = appeal_repository or AppealRepository()
         self.loyalty_score_service = loyalty_score_service or LoyaltyScoreService()
         self.queue_service = queue_service or QueueService()
-        self.content_restoration_service = content_restoration_service or ContentRestorationService()
+        self.content_restoration_service = (
+            content_restoration_service or ContentRestorationService()
+        )
 
     async def submit_appeal(
         self, user_pk: UUID, appeal_data: AppealCreate
@@ -276,7 +278,12 @@ class AppealService:
         # Process the decision with editing capability
         if decision == AppealStatus.SUSTAINED:
             await self._process_sustained_appeal_with_edit(
-                appeal, reviewer_pk, edited_content, decision_data.edit_reason
+                appeal,
+                reviewer_pk,
+                edited_content,
+                decision_data.edit_reason,
+                decision_data.review_notes,
+                decision_data.decision_reason,
             )
         elif decision == AppealStatus.DENIED:
             await self._process_denied_appeal(appeal)
@@ -342,6 +349,8 @@ class AppealService:
         reviewer_pk: UUID,
         edited_content: dict[str, str | None] | None = None,
         edit_reason: str | None = None,
+        review_notes: str | None = None,
+        decision_reason: str | None = None,
     ) -> None:
         """Process a sustained appeal with optional content editing."""
 
@@ -366,6 +375,8 @@ class AppealService:
         # 3. Update appeal with restoration info
         if restoration_result.success:
             update_data = AppealUpdateWithRestoration(
+                review_notes=review_notes,
+                decision_reason=decision_reason,
                 restoration_completed=True,
                 restoration_completed_at=datetime.now(UTC).isoformat(),
                 restoration_metadata={

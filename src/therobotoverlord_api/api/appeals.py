@@ -24,7 +24,9 @@ from therobotoverlord_api.database.models.appeal_with_editing import (
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.services.appeal_service import AppealService
-from therobotoverlord_api.services.content_versioning_service import ContentVersioningService
+from therobotoverlord_api.services.content_versioning_service import (
+    ContentVersioningService,
+)
 
 router = APIRouter(prefix="/appeals", tags=["appeals"])
 
@@ -308,7 +310,9 @@ async def get_user_appeals_admin(
 async def get_content_version_history(
     content_pk: UUID,
     current_user: Annotated[User, Depends(require_moderator)],
-    versioning_service: Annotated[ContentVersioningService, Depends(get_content_versioning_service)],
+    versioning_service: Annotated[
+        ContentVersioningService, Depends(get_content_versioning_service)
+    ],
 ):
     """Get version history for content (moderator only)."""
     return await versioning_service.get_content_history(content_pk)
@@ -319,7 +323,9 @@ async def get_content_version_diff(
     content_pk: UUID,
     version_number: int,
     current_user: Annotated[User, Depends(require_moderator)],
-    versioning_service: Annotated[ContentVersioningService, Depends(get_content_versioning_service)],
+    versioning_service: Annotated[
+        ContentVersioningService, Depends(get_content_versioning_service)
+    ],
 ):
     """Get diff between content versions (moderator only)."""
     # Get content history to find the version by number

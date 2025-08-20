@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
+from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.content_version import ContentVersion
 from therobotoverlord_api.database.models.content_version import ContentVersionCreate
 from therobotoverlord_api.database.models.content_version import ContentVersionDiff
 from therobotoverlord_api.database.models.content_version import ContentVersionSummary
-from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.repositories.content_version import (
     ContentVersionRepository,
 )
@@ -35,19 +35,18 @@ class ContentVersioningService:
             content_type=content_type,
             content_pk=content_pk,
             original_title=original_content.get("title"),
-            original_content=original_content["content"],
+            original_content=original_content["content"] or "",
             original_description=original_content.get("description"),
+            edited_title=edited_content.get("title") if edited_content else None,
+            edited_content=edited_content.get("content") if edited_content else None,
+            edited_description=edited_content.get("description")
+            if edited_content
+            else None,
             edited_by=edited_by,
             edit_reason=edit_reason,
             edit_type=edit_type,
             appeal_pk=appeal_pk,
         )
-
-        # Add edited content if provided
-        if edited_content:
-            version_data.edited_title = edited_content.get("title")
-            version_data.edited_content = edited_content.get("content")
-            version_data.edited_description = edited_content.get("description")
 
         return await self.version_repository.create_version(version_data)
 
