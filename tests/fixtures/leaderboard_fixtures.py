@@ -12,7 +12,9 @@ import pytest
 from therobotoverlord_api.database.models.leaderboard import BadgeSummary
 from therobotoverlord_api.database.models.leaderboard import LeaderboardEntry
 from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
+from therobotoverlord_api.database.models.leaderboard import LeaderboardResponse
 from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
+from therobotoverlord_api.database.models.leaderboard import PaginationInfo
 from therobotoverlord_api.database.models.leaderboard import RankHistoryEntry
 from therobotoverlord_api.database.models.leaderboard import UserRankLookup
 
@@ -107,7 +109,7 @@ def sample_rank_history():
             rank=45,
             loyalty_score=140,
             percentile_rank=0.45,
-            snapshot_date=date.today(),
+            snapshot_date=datetime.now(UTC).date(),
             rank_change=3,  # Improved by 3 positions
         ),
         RankHistoryEntry(
@@ -144,10 +146,6 @@ def sample_leaderboard_stats():
 @pytest.fixture
 def sample_leaderboard_response(sample_leaderboard_entries):
     """Sample leaderboard response for testing."""
-    from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
-    from therobotoverlord_api.database.models.leaderboard import LeaderboardResponse
-    from therobotoverlord_api.database.models.leaderboard import PaginationInfo
-
     return LeaderboardResponse(
         entries=sample_leaderboard_entries[:5],
         pagination=PaginationInfo(

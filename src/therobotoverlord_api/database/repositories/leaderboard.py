@@ -1,6 +1,7 @@
 """Leaderboard repository for The Robot Overlord API."""
 
-from datetime import date
+from datetime import UTC
+from datetime import datetime
 from datetime import timedelta
 from uuid import UUID
 
@@ -30,7 +31,7 @@ class LeaderboardRepository(BaseRepository):
         # since we have custom query methods that handle model conversion directly
         raise NotImplementedError("Use specific query methods instead")
 
-    async def get_leaderboard_page(
+    async def get_leaderboard_page(  # noqa: PLR0915
         self,
         limit: int = 50,
         cursor: LeaderboardCursor | None = None,
@@ -346,7 +347,7 @@ class LeaderboardRepository(BaseRepository):
             ORDER BY snapshot_date DESC
         """
 
-        since_date = date.today() - timedelta(days=days)
+        since_date = datetime.now(UTC).date() - timedelta(days=days)
 
         async with get_db_connection() as conn:
             rows = await conn.fetch(query, user_pk, since_date)

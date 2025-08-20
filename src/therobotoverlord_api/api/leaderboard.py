@@ -27,7 +27,7 @@ router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 
 @router.get("/", response_model=LeaderboardResponse)
-async def get_leaderboard(
+async def get_leaderboard(  # noqa: PLR0913
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(description="Pagination cursor")] = None,
     badge_name: Annotated[str | None, Query(description="Filter by badge name")] = None,
@@ -42,10 +42,10 @@ async def get_leaderboard(
     username_search: Annotated[
         str | None, Query(description="Search by username")
     ] = None,
-    topic_creators_only: Annotated[
+    topic_creators_only: Annotated[  # noqa: FBT002
         bool, Query(description="Show only users who created topics")
     ] = False,
-    active_users_only: Annotated[
+    active_users_only: Annotated[  # noqa: FBT002
         bool, Query(description="Show only active (non-banned) users")
     ] = True,
     current_user: Annotated[User | None, Depends(get_current_user)] = None,

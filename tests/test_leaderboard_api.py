@@ -8,16 +8,20 @@ from uuid import uuid4
 
 import pytest
 
+from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from therobotoverlord_api.api.leaderboard import router
+from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.leaderboard import LeaderboardEntry
 from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
 from therobotoverlord_api.database.models.leaderboard import LeaderboardSearchResult
 from therobotoverlord_api.database.models.leaderboard import PersonalLeaderboardStats
 from therobotoverlord_api.database.models.leaderboard import UserRankLookup
+from therobotoverlord_api.main import app
 
 pytest_plugins = ["tests.fixtures.leaderboard_fixtures"]
 
@@ -52,9 +56,6 @@ class TestLeaderboardAPI:
     @pytest.fixture
     def client(self, mock_current_user):
         """Create test client."""
-        from fastapi import FastAPI
-
-        from therobotoverlord_api.auth.dependencies import get_current_user
 
         app = FastAPI()
         app.include_router(router, prefix="/api/v1")
@@ -67,8 +68,6 @@ class TestLeaderboardAPI:
     @pytest.fixture
     def client_with_admin_auth(self, mock_admin_user):
         """Test client with admin authentication."""
-        from therobotoverlord_api.auth.dependencies import get_current_user
-        from therobotoverlord_api.main import app
 
         # Store original overrides
         original_overrides = app.dependency_overrides.copy()
@@ -639,7 +638,6 @@ class TestLeaderboardAPI:
     @pytest.mark.asyncio
     async def test_admin_refresh_forbidden(self, client):
         """Test admin refresh leaderboard returns 403 for non-admin users."""
-        from fastapi import HTTPException
 
         # Mock require_role to raise 403 for non-admin
         def mock_require_role_forbidden():

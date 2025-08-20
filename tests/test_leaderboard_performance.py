@@ -12,6 +12,7 @@ import pytest
 from therobotoverlord_api.database.models.leaderboard import LeaderboardEntry
 from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
 from therobotoverlord_api.database.models.leaderboard import LeaderboardResponse
+from therobotoverlord_api.database.models.leaderboard import LeaderboardSearchResult
 from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
 from therobotoverlord_api.database.models.leaderboard import PaginationInfo
 from therobotoverlord_api.services.leaderboard_service import LeaderboardService
@@ -118,7 +119,8 @@ class TestLeaderboardPerformance:
         # The important thing is that both scenarios completed successfully
 
         # Verify that both scenarios completed successfully (functional test)
-        assert cache_hit_time > 0 and cache_miss_time > 0
+        assert cache_hit_time > 0
+        assert cache_miss_time > 0
 
         # Verify Redis was called appropriately during cache miss phase
         assert mock_redis_client.get.call_count >= 10  # At least 10 cache lookups
@@ -369,10 +371,6 @@ class TestLeaderboardPerformance:
         # Create search results with varying match scores
         search_results = []
         for i in range(50):
-            from therobotoverlord_api.database.models.leaderboard import (
-                LeaderboardSearchResult,
-            )
-
             entry = LeaderboardSearchResult(
                 user_pk=uuid4(),
                 username=f"citizen_search_{i}",

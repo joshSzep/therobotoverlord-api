@@ -11,7 +11,9 @@ from uuid import uuid4
 import pytest
 
 from therobotoverlord_api.database.models.leaderboard import LeaderboardCursor
+from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
 from therobotoverlord_api.database.models.leaderboard import PersonalLeaderboardStats
+from therobotoverlord_api.database.models.leaderboard import UserRankLookup
 from therobotoverlord_api.services.leaderboard_service import LeaderboardService
 from therobotoverlord_api.workers import redis_connection
 
@@ -309,7 +311,7 @@ class TestLeaderboardService:
         service.repository.search_users.assert_called_once_with("test", 20)
 
     @pytest.mark.asyncio
-    async def test_get_user_personal_stats(
+    async def test_get_user_personal_stats(  # noqa: PLR0913
         self,
         service,
         mock_leaderboard_repository,
@@ -366,8 +368,6 @@ class TestLeaderboardService:
         user_pk = uuid4()
 
         # Mock user not found
-        from therobotoverlord_api.database.models.leaderboard import UserRankLookup
-
         not_found_lookup = UserRankLookup(
             user_pk=user_pk,
             username="",
@@ -511,8 +511,6 @@ class TestLeaderboardService:
         mock_redis_client.reset_mock()
 
         # Test stats cache (15 minutes)
-        from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
-
         stats = LeaderboardStats(
             total_users=100,
             active_users=95,

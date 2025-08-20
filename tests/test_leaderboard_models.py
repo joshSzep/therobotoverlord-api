@@ -1,7 +1,6 @@
 """Unit tests for leaderboard data models."""
 
 from datetime import UTC
-from datetime import date
 from datetime import datetime
 from uuid import uuid4
 
@@ -180,7 +179,7 @@ class TestLeaderboardEntry:
             assert entry.percentile_rank == percentile
 
         # Invalid percentile ranks should raise validation error
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # noqa: PT011
             LeaderboardEntry(
                 user_pk=user_pk,
                 username="test",
@@ -191,7 +190,7 @@ class TestLeaderboardEntry:
                 created_at=datetime.now(UTC),
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # noqa: PT011
             LeaderboardEntry(
                 user_pk=user_pk,
                 username="test",
@@ -351,7 +350,7 @@ class TestRankHistoryEntry:
 
     def test_rank_history_entry_creation(self):
         """Test creating a rank history entry."""
-        snapshot_date = date.today()
+        snapshot_date = datetime.now(UTC).date()
         entry = RankHistoryEntry(
             rank=42,
             loyalty_score=150,
@@ -372,7 +371,7 @@ class TestRankHistoryEntry:
             rank=42,
             loyalty_score=150,
             percentile_rank=0.42,
-            snapshot_date=date.today(),
+            snapshot_date=datetime.now(UTC).date(),
             rank_change=None,  # No previous data
         )
 
@@ -455,7 +454,7 @@ class TestPersonalLeaderboardStats:
                 rank=12,
                 loyalty_score=90,
                 percentile_rank=0.12,
-                snapshot_date=date.today(),
+                snapshot_date=datetime.now(UTC).date(),
                 rank_change=2,  # Improved by 2
             )
         ]

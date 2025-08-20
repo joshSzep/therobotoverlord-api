@@ -8,6 +8,8 @@ from uuid import uuid4
 
 import pytest
 
+from therobotoverlord_api.database.models.leaderboard import LeaderboardCursor
+
 # Import fixtures from leaderboard_fixtures
 from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
 from therobotoverlord_api.database.repositories.leaderboard import LeaderboardRepository
@@ -530,9 +532,6 @@ class TestLeaderboardIntegration:
             # Should include cursor conditions in WHERE clause
             assert "rank > $" in query
             # Decode cursor to check parameters
-            from therobotoverlord_api.database.models.leaderboard import (
-                LeaderboardCursor,
-            )
 
             decoded_cursor = LeaderboardCursor.decode(cursor)
             assert decoded_cursor.rank in params

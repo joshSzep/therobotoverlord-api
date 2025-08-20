@@ -1,6 +1,8 @@
 """Unit tests for leaderboard repository with mocked database."""
 
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -339,7 +341,7 @@ class TestLeaderboardRepository:
                 rank=45,
                 loyalty_score=140,
                 percentile_rank=0.45,
-                snapshot_date=date.today(),
+                snapshot_date=datetime.now(UTC).date(),
                 previous_rank=48,
             ),
             mock_database_rows(
