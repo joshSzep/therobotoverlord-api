@@ -8,6 +8,7 @@ from uuid import UUID
 
 from asyncpg import Record
 
+from therobotoverlord_api.database.connection import get_db_connection
 from therobotoverlord_api.database.models.base import ContentStatus
 from therobotoverlord_api.database.models.private_message import ConversationSummary
 from therobotoverlord_api.database.models.private_message import MessageSearchResult
@@ -69,15 +70,16 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 RETURNING *
             """
 
-            record = await self.db.fetchrow(
-                query,
-                message_dict["sender_pk"],
-                message_dict["recipient_pk"],
-                message_dict["content"],
-                message_dict["conversation_id"],
-                message_dict["sent_at"],
-                message_dict["status"],
-            )
+            async with get_db_connection() as connection:
+                record = await connection.fetchrow(
+                    query,
+                    message_dict["sender_pk"],
+                    message_dict["recipient_pk"],
+                    message_dict["content"],
+                    message_dict["conversation_id"],
+                    message_dict["sent_at"],
+                    message_dict["status"],
+                )
 
             return PrivateMessage.model_validate(record) if record else None
 
@@ -119,26 +121,27 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 LIMIT $2 OFFSET $3
             """
 
-            records = await self.db.fetch(query, conversation_id, limit, offset)
+            async with get_db_connection() as connection:
+                records = await connection.fetch(query, conversation_id, limit, offset)
 
-            # Get total count
-            count_query = f"""
-                SELECT COUNT(*)
-                FROM private_messages pm
-                WHERE pm.conversation_id = $1 {status_filter}
-            """
-            total_count = await self.db.fetchval(count_query, conversation_id)
+                # Get total count
+                count_query = f"""
+                    SELECT COUNT(*)
+                    FROM private_messages pm
+                    WHERE pm.conversation_id = $1 {status_filter}
+                """
+                total_count = await connection.fetchval(count_query, conversation_id)
 
-            # Get other user info
-            other_user_pk = user2_pk if user1_pk != user2_pk else user1_pk
-            other_user_query = """
-                SELECT username, display_name
-                FROM users
-                WHERE pk = $1
-            """
-            other_user = await self.db.fetchrow(other_user_query, other_user_pk)
+                # Get other user info
+                other_user_pk = user2_pk if user1_pk != user2_pk else user1_pk
+                other_user_query = """
+                    SELECT username, display_name
+                    FROM users
+                    WHERE pk = $1
+                """
+                other_user = await connection.fetchrow(other_user_query, other_user_pk)
 
-            if not other_user:
+            if not other_user or total_count is None:
                 return None
 
             messages = [
@@ -149,8 +152,8 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
             return MessageThread(
                 conversation_id=conversation_id,
                 messages=messages,
-                total_count=total_count,
-                has_more=(offset + len(messages)) < total_count,
+                total_count=int(total_count),
+                has_more=(offset + len(messages)) < int(total_count),
                 other_user_pk=other_user_pk,
                 other_user_username=other_user["username"],
                 other_user_display_name=other_user["display_name"],
@@ -220,7 +223,8 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 LIMIT $2 OFFSET $3
             """
 
-            records = await self.db.fetch(query, user_pk, limit, offset)
+            async with get_db_connection() as connection:
+                records = await connection.fetch(query, user_pk, limit, offset)
             return [ConversationSummary.model_validate(record) for record in records]
 
         except Exception:
@@ -239,9 +243,10 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                     AND status = 'approved'
             """
 
-            result = await self.db.execute(
-                query, datetime.now(UTC), message_id, user_pk
-            )
+            async with get_db_connection() as connection:
+                result = await connection.execute(
+                    query, datetime.now(UTC), message_id, user_pk
+                )
             return result == "UPDATE 1"
 
         except Exception:
@@ -262,9 +267,10 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                     AND status = 'approved'
             """
 
-            result = await self.db.execute(
-                query, datetime.now(UTC), conversation_id, user1_pk
-            )
+            async with get_db_connection() as connection:
+                result = await connection.execute(
+                    query, datetime.now(UTC), conversation_id, user1_pk
+                )
             # Extract number of updated rows from result string like "UPDATE 5"
             return int(result.split()[-1]) if result.startswith("UPDATE") else 0
 
@@ -285,7 +291,8 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                     AND status = 'approved'
             """
 
-            record = await self.db.fetchrow(query, user_pk)
+            async with get_db_connection() as connection:
+                record = await connection.fetchrow(query, user_pk)
             return (
                 UnreadMessageCount.model_validate(record)
                 if record
@@ -319,7 +326,10 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 LIMIT $3 OFFSET $4
             """
 
-            records = await self.db.fetch(query, user_pk, search_term, limit, offset)
+            async with get_db_connection() as connection:
+                records = await connection.fetch(
+                    query, user_pk, search_term, limit, offset
+                )
 
             results = []
             for record in records:
@@ -350,13 +360,14 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 RETURNING *
             """
 
-            record = await self.db.fetchrow(
-                query,
-                ContentStatus.APPROVED,
-                datetime.now(UTC),
-                feedback,
-                message_id,
-            )
+            async with get_db_connection() as connection:
+                record = await connection.fetchrow(
+                    query,
+                    ContentStatus.APPROVED,
+                    datetime.now(UTC),
+                    feedback,
+                    message_id,
+                )
 
             return PrivateMessage.model_validate(record) if record else None
 
@@ -376,13 +387,14 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 RETURNING *
             """
 
-            record = await self.db.fetchrow(
-                query,
-                ContentStatus.REJECTED,
-                datetime.now(UTC),
-                feedback,
-                message_id,
-            )
+            async with get_db_connection() as connection:
+                record = await connection.fetchrow(
+                    query,
+                    ContentStatus.REJECTED,
+                    datetime.now(UTC),
+                    feedback,
+                    message_id,
+                )
 
             return PrivateMessage.model_validate(record) if record else None
 
@@ -410,7 +422,8 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
                 LIMIT $1 OFFSET $2
             """
 
-            records = await self.db.fetch(query, limit, offset)
+            async with get_db_connection() as connection:
+                records = await connection.fetch(query, limit, offset)
             return [
                 PrivateMessageWithParticipants.model_validate(record)
                 for record in records
@@ -440,7 +453,8 @@ class PrivateMessageRepository(BaseRepository[PrivateMessage]):
             """
             params.append(datetime.now(UTC))
 
-            result = await self.db.execute(query, *params)
+            async with get_db_connection() as connection:
+                result = await connection.execute(query, *params)
             return result == "UPDATE 1"
 
         except Exception:

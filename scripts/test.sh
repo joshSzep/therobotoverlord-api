@@ -13,7 +13,6 @@ uv run pytest \
     --cov-report=html:htmlcov \
     --cov-report=term-missing \
     --cov-report=term \
-    --tb=short \
     tests/
 
 echo ""
