@@ -246,8 +246,42 @@ class LoyaltyScoreService:
 
         return 0
 
+    async def record_appeal_outcome(
+        self,
+        user_pk: UUID,
+        appeal_pk: UUID,
+        outcome: str,
+        points_awarded: int,
+    ) -> None:
+        """Record loyalty score changes from appeal outcomes."""
+        event_data = {
+            "user_pk": user_pk,
+            "event_type": "appeal_outcome",
+            "content_type": "appeal",
+            "content_pk": appeal_pk,
+            "outcome": outcome,
+            "points_awarded": points_awarded,
+            "metadata": {
+                "appeal_pk": str(appeal_pk),
+                "outcome": outcome,
+            },
+        }
+
+        await self.record_moderation_event(
+            user_pk=user_pk,
+            event_type=ModerationEventType.APPEAL_OUTCOME,
+            content_type=ContentType.APPEAL,
+            content_pk=appeal_pk,
+            outcome=LoyaltyEventOutcome.APPEAL_SUSTAINED
+            if outcome == "sustained"
+            else LoyaltyEventOutcome.APPEAL_DENIED,
+            moderator_pk=None,
+            reason=f"Appeal {outcome}",
+            metadata={"appeal_pk": str(appeal_pk), "outcome": outcome},
+        )
+
     async def _invalidate_user_cache(self, user_pk: UUID) -> None:
-        """Invalidate all cached data for a user."""
+        """Invalidate all cached data for a user (private method)."""
         redis_client = await get_redis_client()
         cache_keys = [
             f"loyalty_profile:{user_pk}",
@@ -257,6 +291,10 @@ class LoyaltyScoreService:
 
         for key in cache_keys:
             await redis_client.delete(key)
+
+    async def invalidate_user_cache(self, user_pk: UUID) -> None:
+        """Invalidate all cached data for a user (public method)."""
+        await self._invalidate_user_cache(user_pk)
 
 
 # Global service instance

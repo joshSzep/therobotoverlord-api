@@ -78,3 +78,9 @@ async def get_optional_user(request: Request) -> User | None:
         return None
 
     return user
+
+
+# Convenience dependencies for common roles
+require_moderator = require_role(UserRole.MODERATOR)
+require_admin = require_role(UserRole.ADMIN)
+require_superadmin = require_role(UserRole.SUPERADMIN)

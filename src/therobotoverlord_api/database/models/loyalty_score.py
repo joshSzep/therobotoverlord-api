@@ -15,6 +15,7 @@ class ModerationEventType(str, Enum):
     TOPIC_MODERATION = "topic_moderation"
     PRIVATE_MESSAGE_MODERATION = "private_message_moderation"
     APPEAL_RESOLUTION = "appeal_resolution"
+    APPEAL_OUTCOME = "appeal_outcome"
     MANUAL_ADJUSTMENT = "manual_adjustment"
 
 
@@ -24,6 +25,7 @@ class ContentType(str, Enum):
     POST = "post"
     TOPIC = "topic"
     PRIVATE_MESSAGE = "private_message"
+    APPEAL = "appeal"
 
 
 class LoyaltyEventOutcome(str, Enum):

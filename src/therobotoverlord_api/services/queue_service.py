@@ -361,6 +361,23 @@ class QueueService:
             logger.exception(f"Error estimating wait time for {queue_type}: {e}")
             return 0
 
+    async def add_appeal_to_queue(self, appeal_pk: UUID) -> None:
+        """Add an appeal to the processing queue."""
+        redis_pool = await get_redis_pool()
+        queue_key = "queue:appeals"
+
+        # Add appeal to Redis queue with priority score
+        await redis_pool.zadd(
+            queue_key, {str(appeal_pk): datetime.now(UTC).timestamp()}
+        )
+
+    async def remove_appeal_from_queue(self, appeal_pk: UUID) -> None:
+        """Remove an appeal from the processing queue."""
+        redis_pool = await get_redis_pool()
+        queue_key = "queue:appeals"
+
+        await redis_pool.zrem(queue_key, str(appeal_pk))
+
 
 # Global service instance
 queue_service = QueueService()
