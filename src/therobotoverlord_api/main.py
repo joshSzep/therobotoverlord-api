@@ -13,6 +13,7 @@ from therobotoverlord_api.api.messages import router as messages_router
 from therobotoverlord_api.api.posts import router as posts_router
 from therobotoverlord_api.api.queue import router as queue_router
 from therobotoverlord_api.api.topics import router as topics_router
+from therobotoverlord_api.api.translations import router as translations_router
 from therobotoverlord_api.auth.middleware import AuthenticationMiddleware
 from therobotoverlord_api.database.connection import close_database
 from therobotoverlord_api.database.connection import db
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(posts_router, prefix="/api/v1")
     app.include_router(queue_router, prefix="/api/v1")
     app.include_router(topics_router, prefix="/api/v1")
+    app.include_router(translations_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

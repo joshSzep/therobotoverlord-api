@@ -14,8 +14,11 @@ from fastapi import status
 from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import ContentStatus
+from therobotoverlord_api.database.models.base import ContentType as BaseContentType
 from therobotoverlord_api.database.models.base import UserRole
-from therobotoverlord_api.database.models.loyalty_score import ContentType
+from therobotoverlord_api.database.models.loyalty_score import (
+    ContentType as LoyaltyContentType,
+)
 from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventOutcome
 from therobotoverlord_api.database.models.loyalty_score import ModerationEventType
 from therobotoverlord_api.database.models.post import Post
@@ -30,6 +33,7 @@ from therobotoverlord_api.services.loyalty_score_service import (
     get_loyalty_score_service,
 )
 from therobotoverlord_api.services.queue_service import get_queue_service
+from therobotoverlord_api.services.translation_service import get_translation_service
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -186,12 +190,20 @@ async def create_post(
             detail="Sanctioned users cannot create posts",
         )
 
-    # Set author and submission time
+    # Process content for translation (get canonical English version)
+    translation_service = await get_translation_service()
+    english_content = await translation_service.process_content_for_translation(
+        content_pk=None,  # Will be set after post creation
+        content_type=BaseContentType.POST,
+        content=post_data.content,
+    )
+
+    # Set author and submission time with translated content
     post_create = PostCreate(
         topic_pk=post_data.topic_pk,
         parent_post_pk=post_data.parent_post_pk,
         author_pk=current_user.pk,
-        content=post_data.content,
+        content=english_content,  # Use translated English content
         submitted_at=datetime.now(UTC),
     )
 
@@ -200,8 +212,17 @@ async def create_post(
     post_create_data["status"] = ContentStatus.SUBMITTED
     post = await post_repo.create_from_dict(post_create_data)
 
+    # Now process translation with the actual post ID
+    if post_data.content != english_content:
+        # Re-process translation with correct content_pk
+        await translation_service.process_content_for_translation(
+            content_pk=post.pk,
+            content_type=BaseContentType.POST,
+            content=post_data.content,
+        )
+
     # Basic ToS screening (placeholder)
-    tos_violation = _check_tos_violation_placeholder(post.content)
+    tos_violation = _check_tos_violation_placeholder(post_data.content)
     if tos_violation:
         # Reject post immediately for ToS violation
         update_data = PostUpdate(
@@ -230,7 +251,7 @@ async def create_post(
         await loyalty_service.record_moderation_event(
             user_pk=current_user.pk,
             event_type=ModerationEventType.POST_MODERATION,
-            content_type=ContentType.POST,
+            content_type=LoyaltyContentType.POST,
             content_pk=post.pk,
             outcome=LoyaltyEventOutcome.APPROVED,  # Post creation is initially approved
             reason="Post created by user",
@@ -337,7 +358,7 @@ async def delete_post(
         await loyalty_service.record_moderation_event(
             user_pk=existing_post.author_pk,
             event_type=ModerationEventType.POST_MODERATION,
-            content_type=ContentType.POST,
+            content_type=LoyaltyContentType.POST,
             content_pk=post_id,
             outcome=LoyaltyEventOutcome.REMOVED,
             moderator_pk=current_user.pk,
@@ -366,7 +387,7 @@ async def approve_post(
     await loyalty_service.record_moderation_event(
         user_pk=approved_post.author_pk,
         event_type=ModerationEventType.POST_MODERATION,
-        content_type=ContentType.POST,
+        content_type=LoyaltyContentType.POST,
         content_pk=approved_post.pk,
         outcome=LoyaltyEventOutcome.APPROVED,
         moderator_pk=None,  # Robot Overlord judgment, not human moderator
@@ -396,7 +417,7 @@ async def reject_post(
     await loyalty_service.record_moderation_event(
         user_pk=rejected_post.author_pk,
         event_type=ModerationEventType.POST_MODERATION,
-        content_type=ContentType.POST,
+        content_type=LoyaltyContentType.POST,
         content_pk=rejected_post.pk,
         outcome=LoyaltyEventOutcome.REJECTED,
         moderator_pk=None,  # Robot Overlord judgment, not human moderator
