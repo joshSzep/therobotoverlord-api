@@ -15,6 +15,9 @@ from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import ContentStatus
 from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.loyalty_score import ContentType
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventOutcome
+from therobotoverlord_api.database.models.loyalty_score import ModerationEventType
 from therobotoverlord_api.database.models.post import Post
 from therobotoverlord_api.database.models.post import PostCreate
 from therobotoverlord_api.database.models.post import PostSummary
@@ -23,6 +26,9 @@ from therobotoverlord_api.database.models.post import PostUpdate
 from therobotoverlord_api.database.models.post import PostWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.post import PostRepository
+from therobotoverlord_api.services.loyalty_score_service import (
+    get_loyalty_score_service,
+)
 from therobotoverlord_api.services.queue_service import get_queue_service
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -219,6 +225,17 @@ async def create_post(
     if updated_post:
         post = updated_post
 
+        # Record post creation event for loyalty scoring
+        loyalty_service = await get_loyalty_score_service()
+        await loyalty_service.record_moderation_event(
+            user_pk=current_user.pk,
+            event_type=ModerationEventType.POST_MODERATION,
+            content_type=ContentType.POST,
+            content_pk=post.pk,
+            outcome=LoyaltyEventOutcome.APPROVED,  # Post creation is initially approved
+            reason="Post created by user",
+        )
+
         # Add to moderation queue for AI processing
         queue_service = await get_queue_service()
         queue_id = await queue_service.add_post_to_queue(
@@ -313,15 +330,29 @@ async def delete_post(
             detail="Failed to delete post",
         )
 
+    # Record administrative removal event for loyalty scoring if removed by moderator
+    # Note: This is administrative action, not Robot Overlord judgment
+    if is_moderator and not is_author:
+        loyalty_service = await get_loyalty_score_service()
+        await loyalty_service.record_moderation_event(
+            user_pk=existing_post.author_pk,
+            event_type=ModerationEventType.POST_MODERATION,
+            content_type=ContentType.POST,
+            content_pk=post_id,
+            outcome=LoyaltyEventOutcome.REMOVED,
+            moderator_pk=current_user.pk,
+            reason="Post administratively removed by moderator",
+        )
 
-# Moderation endpoints
+
+# Robot Overlord judgment endpoints (not moderator actions)
 @router.patch("/{post_id}/approve")
 async def approve_post(
     post_id: UUID,
-    _: Annotated[User, Depends(moderator_dependency)],
+    current_user: Annotated[User, Depends(moderator_dependency)],
     overlord_feedback: Annotated[str | None, Query(max_length=500)] = None,
 ) -> Post:
-    """Approve a post (moderator only)."""
+    """Record Robot Overlord's approval of a post (system/admin only)."""
     post_repo = PostRepository()
 
     approved_post = await post_repo.approve_post(post_id, overlord_feedback)
@@ -330,6 +361,18 @@ async def approve_post(
             status_code=status.HTTP_404_NOT_FOUND, detail="Post not found"
         )
 
+    # Record Robot Overlord's judgment for loyalty scoring
+    loyalty_service = await get_loyalty_score_service()
+    await loyalty_service.record_moderation_event(
+        user_pk=approved_post.author_pk,
+        event_type=ModerationEventType.POST_MODERATION,
+        content_type=ContentType.POST,
+        content_pk=approved_post.pk,
+        outcome=LoyaltyEventOutcome.APPROVED,
+        moderator_pk=None,  # Robot Overlord judgment, not human moderator
+        reason="Post approved by Robot Overlord",
+    )
+
     return approved_post
 
 
@@ -337,9 +380,9 @@ async def approve_post(
 async def reject_post(
     post_id: UUID,
     overlord_feedback: Annotated[str, Query(max_length=500)],
-    _: Annotated[User, Depends(moderator_dependency)],
+    current_user: Annotated[User, Depends(moderator_dependency)],
 ) -> Post:
-    """Reject a post with feedback (moderator only)."""
+    """Record Robot Overlord's rejection of a post (system/admin only)."""
     post_repo = PostRepository()
 
     rejected_post = await post_repo.reject_post(post_id, overlord_feedback)
@@ -347,6 +390,18 @@ async def reject_post(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Post not found"
         )
+
+    # Record Robot Overlord's judgment for loyalty scoring
+    loyalty_service = await get_loyalty_score_service()
+    await loyalty_service.record_moderation_event(
+        user_pk=rejected_post.author_pk,
+        event_type=ModerationEventType.POST_MODERATION,
+        content_type=ContentType.POST,
+        content_pk=rejected_post.pk,
+        outcome=LoyaltyEventOutcome.REJECTED,
+        moderator_pk=None,  # Robot Overlord judgment, not human moderator
+        reason=f"Post rejected by Robot Overlord: {overlord_feedback}",
+    )
 
     return rejected_post
 

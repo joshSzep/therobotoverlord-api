@@ -311,7 +311,7 @@ class TestLeaderboardService:
         service.repository.search_users.assert_called_once_with("test", 20)
 
     @pytest.mark.asyncio
-    async def test_get_user_personal_stats(  # noqa: PLR0913
+    async def test_get_user_personal_stats(
         self,
         service,
         mock_leaderboard_repository,

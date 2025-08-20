@@ -6,6 +6,19 @@ from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.base import QueueStatus
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.loyalty_score import (
+    ContentType as LoyaltyContentType,
+)
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventFilters
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventOutcome
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventResponse
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyScoreAdjustment
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyScoreBreakdown
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyScoreHistory
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyScoreStats
+from therobotoverlord_api.database.models.loyalty_score import ModerationEvent
+from therobotoverlord_api.database.models.loyalty_score import ModerationEventType
+from therobotoverlord_api.database.models.loyalty_score import UserLoyaltyProfile
 from therobotoverlord_api.database.models.post import Post
 from therobotoverlord_api.database.models.post import PostCreate
 from therobotoverlord_api.database.models.post import PostSummary
@@ -48,8 +61,18 @@ __all__ = [
     "ContentStatus",
     "ContentType",
     "ConversationSummary",
+    "LoyaltyContentType",
+    "LoyaltyEventFilters",
+    "LoyaltyEventOutcome",
+    "LoyaltyEventResponse",
+    "LoyaltyScoreAdjustment",
+    "LoyaltyScoreBreakdown",
+    "LoyaltyScoreHistory",
+    "LoyaltyScoreStats",
     "MessageSearchResult",
     "MessageThread",
+    "ModerationEvent",
+    "ModerationEventType",
     "Post",
     "PostCreate",
     "PostModerationQueue",
@@ -81,6 +104,7 @@ __all__ = [
     "User",
     "UserCreate",
     "UserLeaderboard",
+    "UserLoyaltyProfile",
     "UserProfile",
     "UserRole",
     "UserUpdate",

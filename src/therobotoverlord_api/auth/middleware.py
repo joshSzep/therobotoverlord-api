@@ -16,8 +16,11 @@ from therobotoverlord_api.auth.jwt_service import JWTService
 from therobotoverlord_api.auth.models import TokenClaims
 from therobotoverlord_api.auth.session_service import SessionService
 from therobotoverlord_api.config.auth import get_auth_settings
-from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.user import UserRole
 from therobotoverlord_api.database.repositories.user import UserRepository
+from therobotoverlord_api.services.loyalty_score_service import (
+    get_loyalty_score_service,
+)
 
 
 class AuthenticatedUser:
@@ -160,7 +163,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             token_pair = new_jwt_service.create_token_pair(
                 user_id=user.pk,
                 role=user.role,
-                permissions=self._get_user_permissions(user),
+                permissions=await self._get_user_permissions(user),
                 session_id=session_id,
             )
 
@@ -187,7 +190,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         return None
 
-    def _get_user_permissions(self, user) -> list[str]:
+    async def _get_user_permissions(self, user) -> list[str]:
         """Get user permissions based on role and loyalty score."""
         permissions = ["view_content", "create_posts", "send_private_messages"]
 
@@ -219,8 +222,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 ]
             )
 
-        # Check loyalty-based permissions
-        if user.loyalty_score >= 100:  # Placeholder threshold
+        # Check loyalty-based permissions using service
+        loyalty_service = await get_loyalty_score_service()
+        thresholds = await loyalty_service.get_score_thresholds()
+
+        if user.loyalty_score >= thresholds.get("topic_creation", 0):
             permissions.append("create_topics")
 
         return permissions

@@ -267,10 +267,19 @@ class TestGetTopicThread:
 class TestCreatePost:
     """Test cases for POST /posts/ endpoint."""
 
+    @patch("therobotoverlord_api.api.posts.get_queue_service")
+    @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
     @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
     def test_create_post_success(
-        self, mock_tos_check, mock_repo_class, client, mock_user, sample_post
+        self,
+        mock_tos_check,
+        mock_repo_class,
+        mock_loyalty_service,
+        mock_queue_service,
+        client,
+        mock_user,
+        sample_post,
     ):
         """Test successful post creation."""
         # Mock ToS check to pass
@@ -311,6 +320,15 @@ class TestCreatePost:
         mock_repo.create_from_dict = AsyncMock(return_value=submitted_post)
         mock_repo.update = AsyncMock(return_value=in_transit_post)
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
+
+        # Mock queue service
+        mock_queue_service_instance = AsyncMock()
+        mock_queue_service_instance.add_post_to_queue.return_value = "queue_id_123"
+        mock_queue_service.return_value = mock_queue_service_instance
 
         post_data = {
             "topic_pk": str(uuid4()),
@@ -457,15 +475,20 @@ class TestDeletePost:
 
         client.app.dependency_overrides.clear()
 
+    @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
     def test_delete_post_by_moderator(
-        self, mock_repo_class, client, mock_moderator, sample_post
+        self, mock_repo_class, mock_loyalty_service, client, mock_moderator, sample_post
     ):
         """Test post deletion by moderator."""
         mock_repo = AsyncMock()
         mock_repo.get_by_pk.return_value = sample_post
         mock_repo.delete.return_value = True
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         client.app.dependency_overrides[get_current_user] = lambda: mock_moderator
 
@@ -496,14 +519,19 @@ class TestDeletePost:
 class TestModerationEndpoints:
     """Test cases for moderation endpoints."""
 
+    @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
     def test_approve_post_success(
-        self, mock_repo_class, client, mock_moderator, sample_post
+        self, mock_repo_class, mock_loyalty_service, client, mock_moderator, sample_post
     ):
         """Test successful post approval by moderator."""
         mock_repo = AsyncMock()
         mock_repo.approve_post.return_value = sample_post
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         client.app.dependency_overrides[moderator_dependency] = lambda: mock_moderator
 
@@ -514,14 +542,19 @@ class TestModerationEndpoints:
 
         client.app.dependency_overrides.clear()
 
+    @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
     def test_reject_post_success(
-        self, mock_repo_class, client, mock_moderator, sample_post
+        self, mock_repo_class, mock_loyalty_service, client, mock_moderator, sample_post
     ):
         """Test successful post rejection by moderator."""
         mock_repo = AsyncMock()
         mock_repo.reject_post.return_value = sample_post
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         client.app.dependency_overrides[moderator_dependency] = lambda: mock_moderator
 

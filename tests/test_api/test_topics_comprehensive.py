@@ -204,12 +204,16 @@ class TestGetTopic:
 class TestCreateTopic:
     """Test cases for POST /topics/ endpoint."""
 
-    @patch("therobotoverlord_api.api.topics.UserRepository")
+    @patch("therobotoverlord_api.api.topics.get_queue_service")
+    @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
+    @patch("therobotoverlord_api.database.repositories.user.UserRepository")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_create_topic_success(
         self,
         mock_topic_repo_class,
         mock_user_repo_class,
+        mock_loyalty_service,
+        mock_queue_service,
         client,
         mock_user,
         sample_topic,
@@ -225,6 +229,19 @@ class TestCreateTopic:
         mock_user_repo.can_create_topic.return_value = True
         mock_user_repo_class.return_value = mock_user_repo
 
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service_instance.get_score_thresholds.return_value = {
+            "topic_creation": 50
+        }
+        mock_loyalty_service_instance.record_moderation_event.return_value = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
+
+        # Mock queue service
+        mock_queue_service_instance = AsyncMock()
+        mock_queue_service_instance.add_topic_to_queue.return_value = AsyncMock()
+        mock_queue_service.return_value = mock_queue_service_instance
+
         topic_data = {
             "title": "New Topic",
             "description": "This is a new topic for debate",
@@ -239,14 +256,16 @@ class TestCreateTopic:
         data = response.json()
         assert data["title"] == sample_topic.title
         mock_topic_repo.create.assert_called_once()
-        mock_user_repo.can_create_topic.assert_called_once_with(mock_user.pk, 0.1)
+        # Loyalty service should be called instead of UserRepository.can_create_topic
+        mock_loyalty_service_instance.get_score_thresholds.assert_called_once()
 
         # Clean up
         client.app.dependency_overrides.clear()
 
-    @patch("therobotoverlord_api.api.topics.UserRepository")
+    @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
+    @patch("therobotoverlord_api.database.repositories.user.UserRepository")
     def test_create_topic_insufficient_loyalty(
-        self, mock_user_repo_class, client, mock_user
+        self, mock_user_repo_class, mock_loyalty_service, client, mock_user
     ):
         """Test topic creation with insufficient loyalty score."""
         mock_user.loyalty_score = 5  # Below threshold
@@ -255,6 +274,13 @@ class TestCreateTopic:
         mock_user_repo.can_create_topic.return_value = False
         mock_user_repo.get_top_percent_loyalty_threshold.return_value = 75
         mock_user_repo_class.return_value = mock_user_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service_instance.get_score_thresholds.return_value = {
+            "topic_creation": 50
+        }
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         topic_data = {
             "title": "New Topic",
@@ -269,12 +295,8 @@ class TestCreateTopic:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         response_detail = response.json()["detail"]
         assert "Insufficient loyalty score" in response_detail
-        assert "top 10%" in response_detail
-        assert "minimum score: 75" in response_detail
-        assert "Your current score: 5" in response_detail
-
-        mock_user_repo.can_create_topic.assert_called_once_with(mock_user.pk, 0.1)
-        mock_user_repo.get_top_percent_loyalty_threshold.assert_called_once_with(0.1)
+        assert "Required: 50" in response_detail
+        assert "Your score: 5" in response_detail
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -293,14 +315,24 @@ class TestCreateTopic:
 class TestModerationEndpoints:
     """Test cases for moderation endpoints."""
 
+    @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_approve_topic_success(
-        self, mock_repo_class, client, mock_moderator, sample_topic
+        self,
+        mock_repo_class,
+        mock_loyalty_service,
+        client,
+        mock_moderator,
+        sample_topic,
     ):
         """Test successful topic approval by moderator."""
         mock_repo = AsyncMock()
         mock_repo.approve_topic.return_value = sample_topic
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         topic_id = sample_topic.pk
 
@@ -315,14 +347,24 @@ class TestModerationEndpoints:
         # Clean up
         client.app.dependency_overrides.clear()
 
+    @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_reject_topic_success(
-        self, mock_repo_class, client, mock_moderator, sample_topic
+        self,
+        mock_repo_class,
+        mock_loyalty_service,
+        client,
+        mock_moderator,
+        sample_topic,
     ):
         """Test successful topic rejection by moderator."""
         mock_repo = AsyncMock()
         mock_repo.reject_topic.return_value = sample_topic
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         topic_id = sample_topic.pk
 
@@ -400,15 +442,25 @@ class TestValidation:
 class TestBusinessLogic:
     """Test cases for business logic validation."""
 
+    @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_moderator_bypass_loyalty_score(
-        self, mock_repo_class, client, mock_moderator, sample_topic
+        self,
+        mock_repo_class,
+        mock_loyalty_service,
+        client,
+        mock_moderator,
+        sample_topic,
     ):
         """Test that moderators can create topics regardless of loyalty score."""
         mock_moderator.loyalty_score = 0  # Below threshold but should be bypassed
         mock_repo = AsyncMock()
         mock_repo.create.return_value = sample_topic
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         topic_data = {
             "title": "Moderator Topic",

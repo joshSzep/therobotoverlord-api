@@ -27,7 +27,7 @@ router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 
 @router.get("/", response_model=LeaderboardResponse)
-async def get_leaderboard(  # noqa: PLR0913
+async def get_leaderboard(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(description="Pagination cursor")] = None,
     badge_name: Annotated[str | None, Query(description="Filter by badge name")] = None,

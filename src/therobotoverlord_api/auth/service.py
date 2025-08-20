@@ -11,11 +11,14 @@ from therobotoverlord_api.auth.models import AuthResponse
 from therobotoverlord_api.auth.models import GoogleUserInfo
 from therobotoverlord_api.auth.models import TokenPair
 from therobotoverlord_api.auth.session_service import SessionService
-from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.models.user import UserCreate
+from therobotoverlord_api.database.models.user import UserRole
 from therobotoverlord_api.database.models.user import UserUpdate
 from therobotoverlord_api.database.repositories.user import UserRepository
+from therobotoverlord_api.services.loyalty_score_service import (
+    get_loyalty_score_service,
+)
 
 
 class AuthService:
@@ -49,7 +52,7 @@ class AuthService:
         user, is_new_user = await self._get_or_create_user(google_user_info)
 
         # Generate user permissions
-        permissions = self._get_user_permissions(user)
+        permissions = await self._get_user_permissions(user)
 
         # Create JWT token pair
         token_pair = self.jwt_service.create_token_pair(
@@ -107,7 +110,7 @@ class AuthService:
             return None
 
         # Generate new token pair
-        permissions = self._get_user_permissions(user)
+        permissions = await self._get_user_permissions(user)
         new_token_pair = self.jwt_service.create_token_pair(
             user_id=user.pk,
             role=user.role,
@@ -201,7 +204,7 @@ class AuthService:
 
         return username
 
-    def _get_user_permissions(self, user: User) -> list[str]:
+    async def _get_user_permissions(self, user: User) -> list[str]:
         """Get user permissions based on role and loyalty score."""
 
         permissions = [
@@ -242,10 +245,14 @@ class AuthService:
                 ]
             )
 
-        # Loyalty-based permissions
-        if user.loyalty_score >= 100:  # Top 10% threshold placeholder
+        # Loyalty-based permissions using service
+        loyalty_service = await get_loyalty_score_service()
+        thresholds = await loyalty_service.get_score_thresholds()
+
+        if user.loyalty_score >= thresholds.get("topic_creation", 0):
             permissions.append("create_topics")
 
+        # Additional high-loyalty permissions
         if user.loyalty_score >= 500:  # High loyalty threshold
             permissions.extend(["priority_moderation", "extended_appeals"])
 

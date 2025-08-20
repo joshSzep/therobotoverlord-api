@@ -53,10 +53,18 @@ def mock_user():
 class TestTosScreeningFlow:
     """Test ToS screening and dual-queue system."""
 
+    @patch("therobotoverlord_api.api.posts.get_queue_service")
+    @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
     @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
     def test_post_creation_with_tos_pass(
-        self, mock_tos_check, mock_repo_class, client, mock_user
+        self,
+        mock_tos_check,
+        mock_repo_class,
+        mock_loyalty_service,
+        mock_queue_service,
+        client,
+        mock_user,
     ):
         """Test post creation when ToS screening passes."""
         # Mock ToS check to pass
@@ -99,6 +107,15 @@ class TestTosScreeningFlow:
         mock_repo.create_from_dict = AsyncMock(return_value=submitted_post)
         mock_repo.update = AsyncMock(return_value=in_transit_post)
         mock_repo_class.return_value = mock_repo
+
+        # Mock loyalty service
+        mock_loyalty_service_instance = AsyncMock()
+        mock_loyalty_service.return_value = mock_loyalty_service_instance
+
+        # Mock queue service
+        mock_queue_service_instance = AsyncMock()
+        mock_queue_service_instance.add_post_to_queue.return_value = "queue_id_123"
+        mock_queue_service.return_value = mock_queue_service_instance
 
         # Override dependency
         client.app.dependency_overrides[get_current_user] = lambda: mock_user

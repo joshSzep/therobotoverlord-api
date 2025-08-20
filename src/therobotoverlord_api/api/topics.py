@@ -13,13 +13,18 @@ from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.loyalty_score import ContentType
+from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventOutcome
+from therobotoverlord_api.database.models.loyalty_score import ModerationEventType
 from therobotoverlord_api.database.models.topic import Topic
 from therobotoverlord_api.database.models.topic import TopicCreate
 from therobotoverlord_api.database.models.topic import TopicSummary
 from therobotoverlord_api.database.models.topic import TopicWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.topic import TopicRepository
-from therobotoverlord_api.database.repositories.user import UserRepository
+from therobotoverlord_api.services.loyalty_score_service import (
+    get_loyalty_score_service,
+)
 from therobotoverlord_api.services.queue_service import get_queue_service
 
 router = APIRouter(prefix="/topics", tags=["topics"])
@@ -68,17 +73,14 @@ async def create_topic(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Topic:
     """Create a new topic (requires authentication)."""
-    # Check if user can create topics (top N% loyalty score for citizens)
+    # Check if user can create topics using loyalty service
     if current_user.role == UserRole.CITIZEN:
-        user_repo = UserRepository()
-        top_percent = 0.1  # 10% - configurable for future experimentation
-        can_create = await user_repo.can_create_topic(current_user.pk, top_percent)
-        if not can_create:
-            threshold = await user_repo.get_top_percent_loyalty_threshold(top_percent)
-            percent_display = int(top_percent * 100)
+        loyalty_service = await get_loyalty_score_service()
+        thresholds = await loyalty_service.get_score_thresholds()
+        if current_user.loyalty_score < thresholds["topic_creation"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient loyalty score to create topics. You must be in the top {percent_display}% of citizens (minimum score: {threshold}). Your current score: {current_user.loyalty_score}",
+                detail=f"Insufficient loyalty score to create topics. Required: {thresholds['topic_creation']}, Your score: {current_user.loyalty_score}",
             )
 
     # Set the author
@@ -86,6 +88,17 @@ async def create_topic(
 
     topic_repo = TopicRepository()
     topic = await topic_repo.create(topic_data)
+
+    # Record topic creation event for loyalty scoring
+    loyalty_service = await get_loyalty_score_service()
+    await loyalty_service.record_moderation_event(
+        user_pk=current_user.pk,
+        event_type=ModerationEventType.TOPIC_MODERATION,
+        content_type=ContentType.TOPIC,
+        content_pk=topic.pk,
+        outcome=LoyaltyEventOutcome.APPROVED,  # Topic creation is initially approved
+        reason="Topic created by user",
+    )
 
     # Add topic to moderation queue
     queue_service = await get_queue_service()
@@ -117,6 +130,19 @@ async def approve_topic(
             status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found"
         )
 
+    # Record moderation approval event for loyalty scoring
+    if topic.author_pk:
+        loyalty_service = await get_loyalty_score_service()
+        await loyalty_service.record_moderation_event(
+            user_pk=topic.author_pk,
+            event_type=ModerationEventType.TOPIC_MODERATION,
+            content_type=ContentType.TOPIC,
+            content_pk=topic.pk,
+            outcome=LoyaltyEventOutcome.APPROVED,
+            moderator_pk=current_user.pk,
+            reason="Topic approved by moderator",
+        )
+
     return topic
 
 
@@ -132,6 +158,19 @@ async def reject_topic(
     if not topic:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found"
+        )
+
+    # Record moderation rejection event for loyalty scoring
+    if topic.author_pk:
+        loyalty_service = await get_loyalty_score_service()
+        await loyalty_service.record_moderation_event(
+            user_pk=topic.author_pk,
+            event_type=ModerationEventType.TOPIC_MODERATION,
+            content_type=ContentType.TOPIC,
+            content_pk=topic.pk,
+            outcome=LoyaltyEventOutcome.REJECTED,
+            moderator_pk=current_user.pk,
+            reason="Topic rejected by moderator",
         )
 
     return topic
