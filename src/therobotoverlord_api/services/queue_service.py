@@ -128,6 +128,76 @@ class QueueService:
             logger.exception(f"Error adding post {post_id} to queue: {e}")
             return None
 
+    async def add_message_to_queue(
+        self, message_id: UUID, sender_pk: UUID, recipient_pk: UUID, priority: int = 0
+    ) -> UUID | None:
+        """Add a private message to the moderation queue."""
+        await self._ensure_connections()
+
+        try:
+            # Calculate priority score
+            now = datetime.now(UTC)
+            priority_score = int(now.timestamp() * 1000) + priority
+
+            # Generate conversation ID
+            conversation_id = self._generate_conversation_id(sender_pk, recipient_pk)
+
+            # Get current queue position for this conversation
+            position = await self._get_next_queue_position(
+                "private_message_queue", conversation_id
+            )
+
+            # Insert into queue
+            query = """
+                INSERT INTO private_message_queue
+                (message_pk, sender_pk, recipient_pk, conversation_id, priority_score, priority, position_in_queue, status, entered_queue_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+                RETURNING pk
+            """
+
+            result = await self.db.fetchrow(
+                query,
+                message_id,
+                sender_pk,
+                recipient_pk,
+                conversation_id,
+                priority_score,
+                priority,
+                position,
+                now,
+            )
+
+            if result:
+                queue_id = result["pk"]
+
+                # Enqueue the job in Redis
+                if self.redis_pool:
+                    await self.redis_pool.enqueue_job(
+                        "process_private_message_moderation",
+                        str(queue_id),
+                        str(message_id),
+                        _job_id=f"message_{message_id}",
+                    )
+                else:
+                    raise RuntimeError("Redis pool not available")
+
+                logger.info(
+                    f"Added private message {message_id} to queue at position {position}"
+                )
+                return queue_id
+
+            return None
+
+        except Exception as e:
+            logger.exception(f"Error adding private message {message_id} to queue: {e}")
+            return None
+
+    def _generate_conversation_id(self, user1_pk: UUID, user2_pk: UUID) -> str:
+        """Generate consistent conversation ID for two users."""
+        min_id = min(str(user1_pk), str(user2_pk))
+        max_id = max(str(user1_pk), str(user2_pk))
+        return f"users_{min_id}_{max_id}"
+
     async def get_queue_status(self, queue_type: str) -> dict[str, Any]:
         """Get status information for a specific queue."""
         await self._ensure_connections()
@@ -228,7 +298,9 @@ class QueueService:
             )
             return None
 
-    async def _get_next_queue_position(self, queue_table: str) -> int:
+    async def _get_next_queue_position(
+        self, queue_table: str, conversation_id: str | None = None
+    ) -> int:
         """Get the next position number in the queue."""
         query = f"""  # nosec B608
             SELECT COALESCE(MAX(position_in_queue), 0) + 1 as next_position

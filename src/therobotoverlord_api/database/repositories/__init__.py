@@ -2,6 +2,9 @@
 
 from therobotoverlord_api.database.repositories.base import BaseRepository
 from therobotoverlord_api.database.repositories.post import PostRepository
+from therobotoverlord_api.database.repositories.private_message import (
+    PrivateMessageRepository,
+)
 from therobotoverlord_api.database.repositories.queue import (
     PostModerationQueueRepository,
 )
@@ -20,6 +23,7 @@ __all__ = [
     "PostModerationQueueRepository",
     "PostRepository",
     "PrivateMessageQueueRepository",
+    "PrivateMessageRepository",
     "QueueOverviewRepository",
     "TopicCreationQueueRepository",
     "TopicRepository",

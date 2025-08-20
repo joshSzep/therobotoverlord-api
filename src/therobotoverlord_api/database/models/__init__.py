@@ -12,6 +12,16 @@ from therobotoverlord_api.database.models.post import PostSummary
 from therobotoverlord_api.database.models.post import PostThread
 from therobotoverlord_api.database.models.post import PostUpdate
 from therobotoverlord_api.database.models.post import PostWithAuthor
+from therobotoverlord_api.database.models.private_message import ConversationSummary
+from therobotoverlord_api.database.models.private_message import MessageSearchResult
+from therobotoverlord_api.database.models.private_message import MessageThread
+from therobotoverlord_api.database.models.private_message import PrivateMessage
+from therobotoverlord_api.database.models.private_message import PrivateMessageCreate
+from therobotoverlord_api.database.models.private_message import PrivateMessageUpdate
+from therobotoverlord_api.database.models.private_message import (
+    PrivateMessageWithParticipants,
+)
+from therobotoverlord_api.database.models.private_message import UnreadMessageCount
 from therobotoverlord_api.database.models.queue import PostModerationQueue
 from therobotoverlord_api.database.models.queue import PostModerationQueueCreate
 from therobotoverlord_api.database.models.queue import PrivateMessageQueue
@@ -37,18 +47,23 @@ __all__ = [
     "BaseDBModel",
     "ContentStatus",
     "ContentType",
+    "ConversationSummary",
+    "MessageSearchResult",
+    "MessageThread",
     "Post",
     "PostCreate",
     "PostModerationQueue",
     "PostModerationQueueCreate",
     "PostSummary",
     "PostThread",
-    "PostTosScreeningQueue",
-    "PostTosScreeningQueueCreate",
     "PostUpdate",
     "PostWithAuthor",
+    "PrivateMessage",
+    "PrivateMessageCreate",
     "PrivateMessageQueue",
     "PrivateMessageQueueCreate",
+    "PrivateMessageUpdate",
+    "PrivateMessageWithParticipants",
     "QueueItemUpdate",
     "QueueOverview",
     "QueueStatus",
@@ -62,6 +77,7 @@ __all__ = [
     "TopicSummary",
     "TopicUpdate",
     "TopicWithAuthor",
+    "UnreadMessageCount",
     "User",
     "UserCreate",
     "UserLeaderboard",

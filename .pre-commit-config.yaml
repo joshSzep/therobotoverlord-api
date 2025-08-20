@@ -47,7 +47,7 @@ repos:
         entry: uv run mypy
         language: system
         types: [python]
-        args: [--ignore-missing-imports, --show-error-codes]
+        args: [--ignore-missing-imports, --show-error-codes, --explicit-package-bases]
 
       # pyright type checker
       - id: pyright

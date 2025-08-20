@@ -4,6 +4,8 @@ import logging
 
 from uuid import UUID
 
+import asyncpg
+
 from therobotoverlord_api.database.repositories.post import PostRepository
 from therobotoverlord_api.workers.base import BaseWorker
 from therobotoverlord_api.workers.base import QueueWorkerMixin
@@ -22,11 +24,13 @@ class PostModerationWorker(BaseWorker, QueueWorkerMixin):
         logger.info(f"Processing post moderation for post {post_id}")
 
         # Ensure database connection is available
-        if not self.db and ctx.get("db"):
-            self.db = ctx["db"]
-        elif not self.db:
-            logger.error("Database connection not available")
-            return False
+        if self.db is None:  # type: ignore[has-type]
+            db: asyncpg.Connection | None = ctx.get("db")
+            if db and isinstance(db, asyncpg.Connection):
+                self.db = db
+            else:
+                logger.error("Database connection not available")
+                return False
 
         try:
             post_repo = PostRepository()
