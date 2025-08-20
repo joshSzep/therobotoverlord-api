@@ -91,7 +91,7 @@ class TestRBACServiceRoleManagement:
             "create_role",
             side_effect=Exception("DB error"),
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="DB error"):
                 await rbac_service.create_role(role_data)
 
     @pytest.mark.asyncio
@@ -717,7 +717,7 @@ class TestRBACServiceExceptionHandling:
             "create_role",
             side_effect=Exception("Database error"),
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Database error"):
                 await rbac_service.create_role(role_data)
 
     @pytest.mark.asyncio
@@ -731,7 +731,7 @@ class TestRBACServiceExceptionHandling:
             "assign_permission_to_role",
             side_effect=Exception("Database error"),
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Database error"):
                 await rbac_service.assign_permission_to_role(role_pk, permission_pk)
 
     @pytest.mark.asyncio
@@ -745,5 +745,5 @@ class TestRBACServiceExceptionHandling:
             "has_permission",
             side_effect=Exception("Database error"),
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Database error"):
                 await rbac_service.has_permission(user_pk, permission_name)
