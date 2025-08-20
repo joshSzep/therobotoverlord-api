@@ -95,7 +95,9 @@ async def get_leaderboard(  # noqa: PLR0913
             current_user_pk=current_user_pk,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
 
 
 @router.get("/top/{count}")
@@ -177,7 +179,7 @@ async def get_my_leaderboard_stats(
     try:
         return await service.get_user_personal_stats(current_user.pk)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
 @router.get("/user/{user_pk}/stats", response_model=PersonalLeaderboardStats)
