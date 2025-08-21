@@ -30,46 +30,48 @@ class TestBadgeRepositorySimple:
             "criteria_config": {"min_score": 100},
             "is_active": True,
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
 
     @pytest.mark.asyncio
     async def test_get_active_badges(self, badge_repo, mock_badge_record):
         """Test getting active badges."""
-        with patch.object(badge_repo, 'find_by', new_callable=AsyncMock) as mock_find:
+        with patch.object(badge_repo, "find_by", new_callable=AsyncMock) as mock_find:
             mock_find.return_value = [mock_badge_record]
-            
+
             result = await badge_repo.get_active_badges()
-            
+
             mock_find.assert_called_once_with(is_active=True)
             assert result == [mock_badge_record]
 
     @pytest.mark.asyncio
     async def test_get_by_name(self, badge_repo, mock_badge_record):
         """Test getting badge by name."""
-        with patch.object(badge_repo, 'find_one_by', new_callable=AsyncMock) as mock_find:
+        with patch.object(
+            badge_repo, "find_one_by", new_callable=AsyncMock
+        ) as mock_find:
             mock_find.return_value = mock_badge_record
-            
+
             result = await badge_repo.get_by_name("Test Badge")
-            
+
             mock_find.assert_called_once_with(name="Test Badge")
             assert result == mock_badge_record
 
     @pytest.mark.asyncio
     async def test_get_badges_by_type(self, badge_repo, mock_badge_record):
         """Test getting badges by type."""
-        with patch.object(badge_repo, 'find_by', new_callable=AsyncMock) as mock_find:
+        with patch.object(badge_repo, "find_by", new_callable=AsyncMock) as mock_find:
             mock_find.return_value = [mock_badge_record]
-            
+
             result = await badge_repo.get_badges_by_type("positive")
-            
+
             mock_find.assert_called_once_with(badge_type="positive", is_active=True)
             assert result == [mock_badge_record]
 
     def test_record_to_model(self, badge_repo, mock_badge_record):
         """Test converting record to model."""
         result = badge_repo._record_to_model(mock_badge_record)
-        
+
         assert result.pk == mock_badge_record["pk"]
         assert result.name == mock_badge_record["name"]
 
@@ -94,7 +96,7 @@ class TestUserBadgeRepositorySimple:
             "awarded_for_topic_pk": None,
             "awarded_by_event": "manual",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
 
     @pytest.mark.asyncio
@@ -103,7 +105,7 @@ class TestUserBadgeRepositorySimple:
         """Test getting user badges with details."""
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
-        
+
         mock_badge_details = {
             "user_badge_pk": uuid4(),
             "user_pk": uuid4(),
@@ -122,20 +124,20 @@ class TestUserBadgeRepositorySimple:
             "is_active": True,
             "badge_created_at": "2024-01-01T00:00:00Z",
             "badge_updated_at": "2024-01-01T00:00:00Z",
-            "username": "testuser"
+            "username": "testuser",
         }
         mock_conn.fetch.return_value = [mock_badge_details]
-        
+
         user_pk = uuid4()
         result = await user_badge_repo.get_user_badges(user_pk)
-        
+
         mock_conn.fetch.assert_called_once()
         assert len(result) == 1
 
     def test_record_to_model(self, user_badge_repo, mock_user_badge_record):
         """Test converting record to model."""
         result = user_badge_repo._record_to_model(mock_user_badge_record)
-        
+
         assert result.pk == mock_user_badge_record["pk"]
         assert result.user_pk == mock_user_badge_record["user_pk"]
         assert result.badge_pk == mock_user_badge_record["badge_pk"]

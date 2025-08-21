@@ -1,11 +1,12 @@
 """Comprehensive tests for TranslationService."""
 
-import pytest
-from datetime import datetime
 from datetime import UTC
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import patch
 from uuid import uuid4
+
+import pytest
 
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.translation import ContentWithTranslation
@@ -39,7 +40,7 @@ class TestTranslationService:
             translation_provider="test_provider",
             translation_metadata={"confidence": 0.95},
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
 
     @pytest.mark.asyncio
@@ -135,7 +136,7 @@ class TestTranslationService:
         assert result.provider == "placeholder"
         assert result.metadata == {
             "source_language": "es",
-            "method": "placeholder_translation"
+            "method": "placeholder_translation",
         }
 
     @pytest.mark.asyncio
@@ -152,7 +153,9 @@ class TestTranslationService:
 
             mock_detect.assert_called_once_with(spanish_content)
             assert result.source_language == "es"
-            assert result.translated_content == "[TRANSLATED FROM ES] Hola, ¿cómo estás?"
+            assert (
+                result.translated_content == "[TRANSLATED FROM ES] Hola, ¿cómo estás?"
+            )
 
     @pytest.mark.asyncio
     async def test_translate_to_english_auto_detect_english(self, service):
@@ -172,14 +175,17 @@ class TestTranslationService:
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_process_content_for_translation_no_content_pk(self, mock_repo, service):
+    async def test_process_content_for_translation_no_content_pk(
+        self, mock_repo, service
+    ):
         """Test processing content without content_pk (initial creation)."""
         content = "Hola mundo"
         content_type = ContentType.POST
 
-        with patch.object(service, "detect_language") as mock_detect, \
-             patch.object(service, "translate_to_english") as mock_translate:
-
+        with (
+            patch.object(service, "detect_language") as mock_detect,
+            patch.object(service, "translate_to_english") as mock_translate,
+        ):
             mock_detect.return_value = LanguageDetectionResult(
                 detected_language="es", confidence=0.9, is_english=False
             )
@@ -190,10 +196,12 @@ class TestTranslationService:
                 target_language="en",
                 quality_score=0.9,
                 provider="test",
-                metadata={}
+                metadata={},
             )
 
-            result = await service.process_content_for_translation(None, content_type, content)
+            result = await service.process_content_for_translation(
+                None, content_type, content
+            )
 
             mock_detect.assert_called_once_with(content)
             mock_translate.assert_called_once_with(content, "es")
@@ -201,7 +209,9 @@ class TestTranslationService:
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_process_content_for_translation_english_no_pk(self, mock_repo, service):
+    async def test_process_content_for_translation_english_no_pk(
+        self, mock_repo, service
+    ):
         """Test processing English content without content_pk."""
         content = "Hello world"
         content_type = ContentType.POST
@@ -211,14 +221,18 @@ class TestTranslationService:
                 detected_language=None, confidence=0.9, is_english=True
             )
 
-            result = await service.process_content_for_translation(None, content_type, content)
+            result = await service.process_content_for_translation(
+                None, content_type, content
+            )
 
             mock_detect.assert_called_once_with(content)
             assert result == content
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_process_content_existing_translation(self, mock_repo, service, mock_translation):
+    async def test_process_content_existing_translation(
+        self, mock_repo, service, mock_translation
+    ):
         """Test processing content with existing translation."""
         content_pk = uuid4()
         content = "Hola mundo"
@@ -229,9 +243,13 @@ class TestTranslationService:
         mock_repo.return_value = mock_repo_instance
         service.translation_repo = mock_repo_instance
 
-        result = await service.process_content_for_translation(content_pk, content_type, content)
+        result = await service.process_content_for_translation(
+            content_pk, content_type, content
+        )
 
-        mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+        mock_repo_instance.get_by_content.assert_called_once_with(
+            content_pk, content_type
+        )
         assert result == mock_translation.translated_content
 
     @pytest.mark.asyncio
@@ -252,9 +270,13 @@ class TestTranslationService:
                 detected_language=None, confidence=0.9, is_english=True
             )
 
-            result = await service.process_content_for_translation(content_pk, content_type, content)
+            result = await service.process_content_for_translation(
+                content_pk, content_type, content
+            )
 
-            mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+            mock_repo_instance.get_by_content.assert_called_once_with(
+                content_pk, content_type
+            )
             mock_detect.assert_called_once_with(content)
             assert result == content
 
@@ -272,9 +294,10 @@ class TestTranslationService:
         mock_repo.return_value = mock_repo_instance
         service.translation_repo = mock_repo_instance
 
-        with patch.object(service, "detect_language") as mock_detect, \
-             patch.object(service, "translate_to_english") as mock_translate:
-
+        with (
+            patch.object(service, "detect_language") as mock_detect,
+            patch.object(service, "translate_to_english") as mock_translate,
+        ):
             mock_detect.return_value = LanguageDetectionResult(
                 detected_language="es", confidence=0.9, is_english=False
             )
@@ -285,16 +308,20 @@ class TestTranslationService:
                 target_language="en",
                 quality_score=0.9,
                 provider="test",
-                metadata={"test": "data"}
+                metadata={"test": "data"},
             )
 
-            result = await service.process_content_for_translation(content_pk, content_type, content)
+            result = await service.process_content_for_translation(
+                content_pk, content_type, content
+            )
 
-            mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+            mock_repo_instance.get_by_content.assert_called_once_with(
+                content_pk, content_type
+            )
             mock_detect.assert_called_once_with(content)
             mock_translate.assert_called_once_with(content, "es")
             mock_repo_instance.create.assert_called_once()
-            
+
             # Verify the TranslationCreate object passed to create
             create_call_args = mock_repo_instance.create.call_args[0][0]
             assert isinstance(create_call_args, TranslationCreate)
@@ -303,12 +330,14 @@ class TestTranslationService:
             assert create_call_args.language_code == "es"
             assert create_call_args.original_content == content
             assert create_call_args.translated_content == "Hello world"
-            
+
             assert result == "Hello world"
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_get_content_with_translation_exists(self, mock_repo, service, mock_translation):
+    async def test_get_content_with_translation_exists(
+        self, mock_repo, service, mock_translation
+    ):
         """Test getting content with existing translation."""
         content_pk = uuid4()
         content_type = ContentType.POST
@@ -319,9 +348,13 @@ class TestTranslationService:
         mock_repo.return_value = mock_repo_instance
         service.translation_repo = mock_repo_instance
 
-        result = await service.get_content_with_translation(content_pk, content_type, english_content)
+        result = await service.get_content_with_translation(
+            content_pk, content_type, english_content
+        )
 
-        mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+        mock_repo_instance.get_by_content.assert_called_once_with(
+            content_pk, content_type
+        )
         assert isinstance(result, ContentWithTranslation)
         assert result.content_pk == content_pk
         assert result.content_type == content_type
@@ -329,11 +362,16 @@ class TestTranslationService:
         assert result.original_content == mock_translation.original_content
         assert result.source_language == mock_translation.language_code
         assert result.has_translation is True
-        assert result.translation_quality_score == mock_translation.translation_quality_score
+        assert (
+            result.translation_quality_score
+            == mock_translation.translation_quality_score
+        )
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_get_content_with_translation_no_translation(self, mock_repo, service):
+    async def test_get_content_with_translation_no_translation(
+        self, mock_repo, service
+    ):
         """Test getting content without existing translation."""
         content_pk = uuid4()
         content_type = ContentType.POST
@@ -344,9 +382,13 @@ class TestTranslationService:
         mock_repo.return_value = mock_repo_instance
         service.translation_repo = mock_repo_instance
 
-        result = await service.get_content_with_translation(content_pk, content_type, english_content)
+        result = await service.get_content_with_translation(
+            content_pk, content_type, english_content
+        )
 
-        mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+        mock_repo_instance.get_by_content.assert_called_once_with(
+            content_pk, content_type
+        )
         assert isinstance(result, ContentWithTranslation)
         assert result.content_pk == content_pk
         assert result.content_type == content_type
@@ -358,7 +400,9 @@ class TestTranslationService:
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.translation_service.TranslationRepository")
-    async def test_retranslate_content_success(self, mock_repo, service, mock_translation):
+    async def test_retranslate_content_success(
+        self, mock_repo, service, mock_translation
+    ):
         """Test retranslating existing content successfully."""
         content_pk = uuid4()
         content_type = ContentType.POST
@@ -373,7 +417,7 @@ class TestTranslationService:
             translation_provider="updated_provider",
             translation_metadata={"updated": True},
             created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC)
+            updated_at=datetime.now(UTC),
         )
 
         mock_repo_instance = AsyncMock()
@@ -390,17 +434,19 @@ class TestTranslationService:
                 target_language="en",
                 quality_score=0.98,
                 provider="updated_provider",
-                metadata={"updated": True}
+                metadata={"updated": True},
             )
 
             result = await service.retranslate_content(content_pk, content_type)
 
-            mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+            mock_repo_instance.get_by_content.assert_called_once_with(
+                content_pk, content_type
+            )
             mock_translate.assert_called_once_with(
                 mock_translation.original_content, mock_translation.language_code
             )
             mock_repo_instance.update.assert_called_once()
-            
+
             # Verify the update data
             update_call_args = mock_repo_instance.update.call_args[0]
             assert update_call_args[0] == mock_translation.pk
@@ -408,7 +454,7 @@ class TestTranslationService:
             assert isinstance(update_data, TranslationUpdate)
             assert update_data.translated_content == "Hello world (updated)"
             assert update_data.translation_quality_score == 0.98
-            
+
             assert result == updated_translation
 
     @pytest.mark.asyncio
@@ -425,7 +471,9 @@ class TestTranslationService:
 
         result = await service.retranslate_content(content_pk, content_type)
 
-        mock_repo_instance.get_by_content.assert_called_once_with(content_pk, content_type)
+        mock_repo_instance.get_by_content.assert_called_once_with(
+            content_pk, content_type
+        )
         assert result is None
 
     @pytest.mark.asyncio
@@ -435,7 +483,7 @@ class TestTranslationService:
         mock_stats = {
             "total_translations": 150,
             "languages_count": 12,
-            "avg_quality_score": 0.87
+            "avg_quality_score": 0.87,
         }
 
         mock_repo_instance = AsyncMock()
@@ -455,7 +503,7 @@ class TestTranslationService:
         mock_distribution = [
             {"language_code": "es", "count": 45},
             {"language_code": "fr", "count": 32},
-            {"language_code": "de", "count": 28}
+            {"language_code": "de", "count": 28},
         ]
 
         mock_repo_instance = AsyncMock()
@@ -471,10 +519,12 @@ class TestTranslationService:
     @pytest.mark.asyncio
     async def test_get_translation_service_function(self):
         """Test the get_translation_service factory function."""
-        from therobotoverlord_api.services.translation_service import get_translation_service
-        
+        from therobotoverlord_api.services.translation_service import (
+            get_translation_service,
+        )
+
         service = await get_translation_service()
-        
+
         assert isinstance(service, TranslationService)
         assert hasattr(service, "translation_repo")
 
@@ -503,7 +553,9 @@ class TestTranslationService:
     @pytest.mark.asyncio
     async def test_detect_language_european_accents(self, service):
         """Test language detection for European languages with accents."""
-        french_content = "Bonjour, comment allez-vous? J'espère que vous passez une bonne journée."
+        french_content = (
+            "Bonjour, comment allez-vous? J'espère que vous passez une bonne journée."
+        )
 
         result = await service.detect_language(french_content)
 

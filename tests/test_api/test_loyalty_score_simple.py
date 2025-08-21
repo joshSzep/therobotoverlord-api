@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+
 from fastapi import HTTPException
 
 
@@ -24,9 +25,9 @@ class TestLoyaltyScoreAPISimple:
         mock_user = type("User", (), {"pk": uuid4()})()
 
         from therobotoverlord_api.api.loyalty_score import get_my_loyalty_profile
-        
+
         result = await get_my_loyalty_profile(mock_user)
-        
+
         mock_service.get_user_loyalty_profile.assert_called_once_with(mock_user.pk)
         assert result == mock_profile
 
@@ -42,10 +43,10 @@ class TestLoyaltyScoreAPISimple:
         mock_user = type("User", (), {"pk": uuid4()})()
 
         from therobotoverlord_api.api.loyalty_score import get_my_loyalty_profile
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await get_my_loyalty_profile(mock_user)
-        
+
         assert exc_info.value.status_code == 404
         assert "User not found" in str(exc_info.value.detail)
 
@@ -60,9 +61,9 @@ class TestLoyaltyScoreAPISimple:
         mock_get_service.return_value = mock_service
 
         from therobotoverlord_api.api.loyalty_score import get_user_loyalty_profile
-        
+
         result = await get_user_loyalty_profile(user_pk)
-        
+
         mock_service.get_user_loyalty_profile.assert_called_once_with(user_pk)
         assert result == mock_profile
 
@@ -79,9 +80,9 @@ class TestLoyaltyScoreAPISimple:
         mock_user = type("User", (), {"pk": uuid4()})()
 
         from therobotoverlord_api.api.loyalty_score import get_my_score_breakdown
-        
+
         result = await get_my_score_breakdown(mock_user)
-        
+
         mock_service.get_user_score_breakdown.assert_called_once_with(mock_user.pk)
         assert result == mock_breakdown
 
@@ -96,9 +97,9 @@ class TestLoyaltyScoreAPISimple:
         mock_get_service.return_value = mock_service
 
         from therobotoverlord_api.api.loyalty_score import get_user_score_breakdown
-        
+
         result = await get_user_score_breakdown(user_pk)
-        
+
         mock_service.get_user_score_breakdown.assert_called_once_with(user_pk)
         assert result == mock_breakdown
 
@@ -112,9 +113,9 @@ class TestLoyaltyScoreAPISimple:
         mock_get_service.return_value = mock_service
 
         from therobotoverlord_api.api.loyalty_score import get_user_score_breakdown
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await get_user_score_breakdown(user_pk)
-        
+
         assert exc_info.value.status_code == 404
         assert "User not found" in str(exc_info.value.detail)

@@ -1,7 +1,6 @@
 """Simple tests for TranslationRepository to improve coverage."""
 
 from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -33,7 +32,7 @@ class TestTranslationRepositorySimple:
             "translation_provider": "google",
             "translation_metadata": {"confidence": 0.95},
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
 
     @pytest.mark.asyncio
@@ -43,10 +42,10 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchrow.return_value = mock_record
-        
+
         content_pk = uuid4()
         result = await translation_repo.get_by_content(content_pk, ContentType.POST)
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result is not None
 
@@ -57,40 +56,46 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchrow.return_value = None
-        
+
         content_pk = uuid4()
         result = await translation_repo.get_by_content(content_pk, ContentType.POST)
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result is None
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.translation.get_db_connection")
-    async def test_get_by_content_and_language(self, mock_get_db, translation_repo, mock_record):
+    async def test_get_by_content_and_language(
+        self, mock_get_db, translation_repo, mock_record
+    ):
         """Test getting translation by content and language."""
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchrow.return_value = mock_record
-        
+
         content_pk = uuid4()
         result = await translation_repo.get_by_content_and_language(
             content_pk, ContentType.POST, "es"
         )
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result is not None
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.translation.get_db_connection")
-    async def test_get_translations_for_content(self, mock_get_db, translation_repo, mock_record):
+    async def test_get_translations_for_content(
+        self, mock_get_db, translation_repo, mock_record
+    ):
         """Test getting all translations for content."""
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [mock_record, mock_record]
-        
+
         content_pk = uuid4()
-        result = await translation_repo.get_translations_for_content(content_pk, ContentType.POST)
-        
+        result = await translation_repo.get_translations_for_content(
+            content_pk, ContentType.POST
+        )
+
         mock_conn.fetch.assert_called_once()
         assert len(result) == 2
 
@@ -101,40 +106,44 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [mock_record]
-        
+
         result = await translation_repo.get_by_language("es", limit=10, offset=0)
-        
+
         mock_conn.fetch.assert_called_once()
         assert len(result) == 1
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.translation.get_db_connection")
-    async def test_get_poor_quality_translations(self, mock_get_db, translation_repo, mock_record):
+    async def test_get_poor_quality_translations(
+        self, mock_get_db, translation_repo, mock_record
+    ):
         """Test getting poor quality translations."""
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [mock_record]
-        
+
         result = await translation_repo.get_poor_quality_translations(
             quality_threshold=0.7, limit=10, offset=0
         )
-        
+
         mock_conn.fetch.assert_called_once()
         assert len(result) == 1
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.translation.get_db_connection")
-    async def test_update_quality_score(self, mock_get_db, translation_repo, mock_record):
+    async def test_update_quality_score(
+        self, mock_get_db, translation_repo, mock_record
+    ):
         """Test updating quality score."""
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchrow.return_value = mock_record
-        
+
         translation_pk = uuid4()
         result = await translation_repo.update_quality_score(
             translation_pk, 0.85, {"updated": True}
         )
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result is not None
 
@@ -145,10 +154,10 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.execute.return_value = "DELETE 2"
-        
+
         content_pk = uuid4()
         result = await translation_repo.delete_by_content(content_pk, ContentType.POST)
-        
+
         mock_conn.execute.assert_called_once()
         assert result is True
 
@@ -159,10 +168,10 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.execute.return_value = "DELETE 0"
-        
+
         content_pk = uuid4()
         result = await translation_repo.delete_by_content(content_pk, ContentType.POST)
-        
+
         mock_conn.execute.assert_called_once()
         assert result is False
 
@@ -177,12 +186,12 @@ class TestTranslationRepositorySimple:
             "unique_languages": 5,
             "translated_content_items": 80,
             "avg_quality_score": 0.85,
-            "poor_quality_count": 10
+            "poor_quality_count": 10,
         }
         mock_conn.fetchrow.return_value = mock_stats
-        
+
         result = await translation_repo.get_translation_stats()
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result == mock_stats
 
@@ -193,9 +202,9 @@ class TestTranslationRepositorySimple:
         mock_conn = AsyncMock()
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchrow.return_value = None
-        
+
         result = await translation_repo.get_translation_stats()
-        
+
         mock_conn.fetchrow.assert_called_once()
         assert result == {}
 
@@ -207,19 +216,19 @@ class TestTranslationRepositorySimple:
         mock_get_db.return_value.__aenter__.return_value = mock_conn
         mock_distribution = [
             {"language_code": "es", "translation_count": 50, "avg_quality_score": 0.9},
-            {"language_code": "fr", "translation_count": 30, "avg_quality_score": 0.8}
+            {"language_code": "fr", "translation_count": 30, "avg_quality_score": 0.8},
         ]
         mock_conn.fetch.return_value = mock_distribution
-        
+
         result = await translation_repo.get_language_distribution()
-        
+
         mock_conn.fetch.assert_called_once()
         assert result == mock_distribution
 
     def test_record_to_model(self, translation_repo, mock_record):
         """Test converting record to model."""
         result = translation_repo._record_to_model(mock_record)
-        
+
         assert result.pk == mock_record["pk"]
         assert result.content_pk == mock_record["content_pk"]
         assert result.language_code == mock_record["language_code"]

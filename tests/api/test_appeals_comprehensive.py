@@ -14,12 +14,9 @@ from fastapi.testclient import TestClient
 from therobotoverlord_api.api.appeals import get_appeal_service
 from therobotoverlord_api.api.appeals import router as appeals_router
 from therobotoverlord_api.auth.dependencies import get_current_user
-from therobotoverlord_api.auth.dependencies import require_moderator
 from therobotoverlord_api.database.models.appeal import AppealCreate
-from therobotoverlord_api.database.models.appeal import AppealDecision
 from therobotoverlord_api.database.models.appeal import AppealEligibility
 from therobotoverlord_api.database.models.appeal import AppealResponse
-from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealType
 from therobotoverlord_api.database.models.appeal import AppealWithContent
@@ -120,7 +117,13 @@ class TestAppealsAPIComprehensive:
     # User-facing endpoint tests
     @pytest.mark.asyncio
     async def test_submit_appeal_success(
-        self, client, test_app, mock_appeal_service, regular_user, sample_appeal_create, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        regular_user,
+        sample_appeal_create,
+        sample_appeal_with_content,
     ):
         """Test successful appeal submission."""
         mock_appeal = type("Appeal", (), {"pk": uuid4()})()
@@ -151,7 +154,10 @@ class TestAppealsAPIComprehensive:
         self, client, test_app, mock_appeal_service, regular_user, sample_appeal_create
     ):
         """Test failed appeal submission."""
-        mock_appeal_service.submit_appeal.return_value = (None, "Daily appeal limit reached")
+        mock_appeal_service.submit_appeal.return_value = (
+            None,
+            "Daily appeal limit reached",
+        )
 
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
@@ -254,7 +260,12 @@ class TestAppealsAPIComprehensive:
 
     @pytest.mark.asyncio
     async def test_get_my_appeals_success(
-        self, client, test_app, mock_appeal_service, regular_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        regular_user,
+        sample_appeal_with_content,
     ):
         """Test successful retrieval of user's appeals."""
         mock_response = AppealResponse(
@@ -295,7 +306,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
-        response = client.get("/api/v1/appeals/my-appeals?status=pending&page=1&page_size=10")
+        response = client.get(
+            "/api/v1/appeals/my-appeals?status=pending&page=1&page_size=10"
+        )
 
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_200_OK
@@ -305,7 +318,12 @@ class TestAppealsAPIComprehensive:
 
     @pytest.mark.asyncio
     async def test_get_my_appeal_success(
-        self, client, test_app, mock_appeal_service, regular_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        regular_user,
+        sample_appeal_with_content,
     ):
         """Test successful retrieval of specific user appeal."""
         sample_appeal_with_content.appellant_pk = regular_user.pk
@@ -314,7 +332,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
-        response = client.get(f"/api/v1/appeals/my-appeals/{sample_appeal_with_content.pk}")
+        response = client.get(
+            f"/api/v1/appeals/my-appeals/{sample_appeal_with_content.pk}"
+        )
 
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_200_OK
@@ -339,7 +359,12 @@ class TestAppealsAPIComprehensive:
 
     @pytest.mark.asyncio
     async def test_get_my_appeal_forbidden(
-        self, client, test_app, mock_appeal_service, regular_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        regular_user,
+        sample_appeal_with_content,
     ):
         """Test retrieval of appeal owned by different user."""
         sample_appeal_with_content.appellant_pk = uuid4()  # Different user
@@ -348,7 +373,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
-        response = client.get(f"/api/v1/appeals/my-appeals/{sample_appeal_with_content.pk}")
+        response = client.get(
+            f"/api/v1/appeals/my-appeals/{sample_appeal_with_content.pk}"
+        )
 
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -370,7 +397,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["message"] == "Appeal withdrawn successfully"
-        mock_appeal_service.withdraw_appeal.assert_called_once_with(appeal_pk, regular_user.pk)
+        mock_appeal_service.withdraw_appeal.assert_called_once_with(
+            appeal_pk, regular_user.pk
+        )
 
     @pytest.mark.asyncio
     async def test_withdraw_appeal_failure(
@@ -378,7 +407,10 @@ class TestAppealsAPIComprehensive:
     ):
         """Test failed appeal withdrawal."""
         appeal_pk = uuid4()
-        mock_appeal_service.withdraw_appeal.return_value = (False, "Cannot withdraw completed appeal")
+        mock_appeal_service.withdraw_appeal.return_value = (
+            False,
+            "Cannot withdraw completed appeal",
+        )
 
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
@@ -443,7 +475,9 @@ class TestAppealsAPIComprehensive:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
         # Test eligibility check endpoint
-        response = client.get(f"/api/v1/appeals/eligibility?content_type=post&content_pk={content_pk}")
+        response = client.get(
+            f"/api/v1/appeals/eligibility?content_type=post&content_pk={content_pk}"
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
         # Test my appeals endpoint
@@ -484,7 +518,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
         # Test with invalid content type
-        response = client.get(f"/api/v1/appeals/eligibility?content_type=invalid&content_pk={content_pk}")
+        response = client.get(
+            f"/api/v1/appeals/eligibility?content_type=invalid&content_pk={content_pk}"
+        )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         response = client.get(f"/api/v1/appeals/content/invalid/{content_pk}")
@@ -493,7 +529,9 @@ class TestAppealsAPIComprehensive:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_pagination_parameters(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_pagination_parameters(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test pagination parameter validation."""
         mock_response = AppealResponse(
             appeals=[],

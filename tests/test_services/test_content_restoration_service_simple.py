@@ -5,9 +5,12 @@ from uuid import uuid4
 
 import pytest
 
-from therobotoverlord_api.database.models.base import ContentType
-from therobotoverlord_api.services.content_restoration_service import ContentRestorationService
-from therobotoverlord_api.services.content_restoration_service import ContentNotFoundError
+from therobotoverlord_api.services.content_restoration_service import (
+    ContentNotFoundError,
+)
+from therobotoverlord_api.services.content_restoration_service import (
+    ContentRestorationService,
+)
 
 
 class TestContentRestorationServiceSimple:
@@ -33,7 +36,7 @@ class TestContentRestorationServiceSimple:
     async def test_get_restoration_history(self, restoration_service):
         """Test getting restoration history."""
         content_pk = uuid4()
-        
+
         # Test that the method exists and can be called
         try:
             result = await restoration_service.get_restoration_history(content_pk)
@@ -49,11 +52,11 @@ class TestContentRestorationServiceSimple:
         mock_stats = {
             "total_restorations": 10,
             "successful_restorations": 8,
-            "failed_restorations": 2
+            "failed_restorations": 2,
         }
         restoration_service.restoration_repository.get_restoration_stats.return_value = mock_stats
-        
+
         result = await restoration_service.get_restoration_stats()
-        
+
         restoration_service.restoration_repository.get_restoration_stats.assert_called_once()
         assert result == mock_stats

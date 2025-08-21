@@ -1,7 +1,7 @@
 """Comprehensive tests for AuthService to achieve high coverage."""
 
-from datetime import datetime
 from datetime import UTC
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch

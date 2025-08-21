@@ -13,8 +13,8 @@ import pytest_asyncio
 
 from asyncpg import Record
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
 from httpx import ASGITransport
+from httpx import AsyncClient
 
 from therobotoverlord_api.config.database import DatabaseSettings
 from therobotoverlord_api.database.models.base import UserRole
@@ -223,7 +223,9 @@ def client():
 @pytest_asyncio.fixture
 async def async_client():
     """Async FastAPI test client."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
 
 

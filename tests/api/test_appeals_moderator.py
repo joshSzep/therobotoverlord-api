@@ -132,7 +132,12 @@ class TestAppealsModeratorAPI:
     # Appeals queue endpoints
     @pytest.mark.asyncio
     async def test_get_appeals_queue_success(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_with_content,
     ):
         """Test successful retrieval of appeals queue."""
         mock_response = AppealResponse(
@@ -178,7 +183,9 @@ class TestAppealsModeratorAPI:
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user
 
-        response = client.get("/api/v1/appeals/queue?status=under_review&page=2&page_size=25")
+        response = client.get(
+            "/api/v1/appeals/queue?status=under_review&page=2&page_size=25"
+        )
 
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_200_OK
@@ -188,7 +195,12 @@ class TestAppealsModeratorAPI:
 
     @pytest.mark.asyncio
     async def test_get_appeal_for_review_success(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_with_content,
     ):
         """Test successful retrieval of appeal for review."""
         mock_appeal_service.get_appeal_by_id.return_value = sample_appeal_with_content
@@ -261,12 +273,19 @@ class TestAppealsModeratorAPI:
 
         test_app.dependency_overrides.clear()
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["detail"] == "Appeal already assigned to another reviewer"
+        assert (
+            response.json()["detail"] == "Appeal already assigned to another reviewer"
+        )
 
     # Appeal decision endpoints
     @pytest.mark.asyncio
     async def test_sustain_appeal_success(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_decision
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_decision,
     ):
         """Test successful appeal sustainment."""
         appeal_pk = uuid4()
@@ -293,7 +312,12 @@ class TestAppealsModeratorAPI:
 
     @pytest.mark.asyncio
     async def test_sustain_appeal_failure(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_decision
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_decision,
     ):
         """Test failed appeal sustainment."""
         appeal_pk = uuid4()
@@ -317,7 +341,12 @@ class TestAppealsModeratorAPI:
 
     @pytest.mark.asyncio
     async def test_deny_appeal_success(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_decision
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_decision,
     ):
         """Test successful appeal denial."""
         appeal_pk = uuid4()
@@ -344,7 +373,12 @@ class TestAppealsModeratorAPI:
 
     @pytest.mark.asyncio
     async def test_deny_appeal_failure(
-        self, client, test_app, mock_appeal_service, moderator_user, sample_appeal_decision
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        moderator_user,
+        sample_appeal_decision,
     ):
         """Test failed appeal denial."""
         appeal_pk = uuid4()
@@ -403,7 +437,12 @@ class TestAppealsModeratorAPI:
     # Admin-specific endpoints
     @pytest.mark.asyncio
     async def test_get_user_appeals_admin_success(
-        self, client, test_app, mock_appeal_service, admin_user, sample_appeal_with_content
+        self,
+        client,
+        test_app,
+        mock_appeal_service,
+        admin_user,
+        sample_appeal_with_content,
     ):
         """Test successful retrieval of user appeals by admin."""
         user_pk = uuid4()
@@ -574,9 +613,7 @@ class TestAppealsModeratorAPI:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_invalid_appeal_status_filter(
-        self, client, test_app, moderator_user
-    ):
+    async def test_invalid_appeal_status_filter(self, client, test_app, moderator_user):
         """Test appeals queue with invalid status filter."""
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user

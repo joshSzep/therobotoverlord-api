@@ -77,12 +77,15 @@ class TestAppealsAPIEdgeCases:
 
     # Service dependency injection edge cases
     @pytest.mark.asyncio
-    async def test_appeal_service_dependency_failure(self, client, test_app, regular_user):
+    async def test_appeal_service_dependency_failure(
+        self, client, test_app, regular_user
+    ):
         """Test behavior when appeal service dependency fails."""
+
         def failing_service():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Service unavailable"
+                detail="Service unavailable",
             )
 
         test_app.dependency_overrides[get_appeal_service] = failing_service
@@ -118,7 +121,9 @@ class TestAppealsAPIEdgeCases:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     @pytest.mark.asyncio
-    async def test_submit_appeal_missing_required_fields(self, client, test_app, regular_user):
+    async def test_submit_appeal_missing_required_fields(
+        self, client, test_app, regular_user
+    ):
         """Test appeal submission with missing required fields."""
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
@@ -149,7 +154,9 @@ class TestAppealsAPIEdgeCases:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_submit_appeal_invalid_enum_values(self, client, test_app, regular_user):
+    async def test_submit_appeal_invalid_enum_values(
+        self, client, test_app, regular_user
+    ):
         """Test appeal submission with invalid enum values."""
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
@@ -182,7 +189,9 @@ class TestAppealsAPIEdgeCases:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_submit_appeal_extremely_long_text(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_submit_appeal_extremely_long_text(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test appeal submission with extremely long text fields."""
         # Create very long strings (assuming there are length limits)
         very_long_reason = "x" * 10000
@@ -206,11 +215,16 @@ class TestAppealsAPIEdgeCases:
 
         test_app.dependency_overrides.clear()
         # This might be handled at validation level or service level
-        assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY]
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ]
 
     # Query parameter edge cases
     @pytest.mark.asyncio
-    async def test_eligibility_check_missing_parameters(self, client, test_app, regular_user):
+    async def test_eligibility_check_missing_parameters(
+        self, client, test_app, regular_user
+    ):
         """Test eligibility check with missing query parameters."""
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
 
@@ -225,7 +239,9 @@ class TestAppealsAPIEdgeCases:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_pagination_boundary_values(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_pagination_boundary_values(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test pagination with boundary values."""
         mock_response = AppealResponse(
             appeals=[],
@@ -260,8 +276,7 @@ class TestAppealsAPIEdgeCases:
 
         # Test exception during appeal retrieval - mock service method to raise HTTPException
         mock_appeal_service.get_appeal_by_id.side_effect = HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error"
         )
 
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
@@ -273,7 +288,9 @@ class TestAppealsAPIEdgeCases:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_concurrent_appeal_operations(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_concurrent_appeal_operations(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test handling of concurrent operations on the same appeal."""
         appeal_pk = uuid4()
 
@@ -294,7 +311,9 @@ class TestAppealsAPIEdgeCases:
 
     # Content type and UUID validation edge cases
     @pytest.mark.asyncio
-    async def test_malformed_uuid_handling(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_malformed_uuid_handling(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test handling of malformed UUIDs in various endpoints."""
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: regular_user
@@ -317,7 +336,9 @@ class TestAppealsAPIEdgeCases:
         test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_content_type_case_sensitivity(self, client, test_app, mock_appeal_service, regular_user):
+    async def test_content_type_case_sensitivity(
+        self, client, test_app, mock_appeal_service, regular_user
+    ):
         """Test content type parameter case sensitivity."""
         content_pk = uuid4()
         mock_appeal_service.get_appealable_content.return_value = {"test": "data"}
@@ -353,14 +374,20 @@ class TestAppealsAPIEdgeCases:
             json={"decision_reason": "", "review_notes": ""},
         )
         # This might be valid or invalid depending on business rules
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_422_UNPROCESSABLE_ENTITY]
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ]
 
         # Test with only whitespace
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny",
             json={"decision_reason": "   ", "review_notes": "\t\n"},
         )
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_422_UNPROCESSABLE_ENTITY]
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ]
 
         test_app.dependency_overrides.clear()
 
@@ -393,10 +420,11 @@ class TestAppealsAPIEdgeCases:
     @pytest.mark.asyncio
     async def test_service_timeout_simulation(self, client, test_app, regular_user):
         """Test behavior when service operations timeout."""
+
         def timeout_service():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Operation timed out"
+                detail="Operation timed out",
             )
 
         test_app.dependency_overrides[get_appeal_service] = timeout_service
