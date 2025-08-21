@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from therobotoverlord_api.api.appeals import router as appeals_router
 from therobotoverlord_api.api.auth import router as auth_router
 from therobotoverlord_api.api.badges import router as badges_router
+from therobotoverlord_api.api.flags import router as flags_router
 from therobotoverlord_api.api.leaderboard import router as leaderboard_router
 from therobotoverlord_api.api.loyalty_score import router as loyalty_router
 from therobotoverlord_api.api.messages import router as messages_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(appeals_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(badges_router)
+    app.include_router(flags_router, prefix="/api/v1")
     app.include_router(leaderboard_router, prefix="/api/v1")
     app.include_router(loyalty_router, prefix="/api/v1")
     app.include_router(messages_router, prefix="/api/v1")

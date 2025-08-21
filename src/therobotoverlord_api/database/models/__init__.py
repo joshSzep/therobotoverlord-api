@@ -24,6 +24,11 @@ from therobotoverlord_api.database.models.content_version import ContentVersionC
 from therobotoverlord_api.database.models.content_version import ContentVersionDiff
 from therobotoverlord_api.database.models.content_version import ContentVersionSummary
 from therobotoverlord_api.database.models.content_version import RestorationResult
+from therobotoverlord_api.database.models.flag import Flag
+from therobotoverlord_api.database.models.flag import FlagCreate
+from therobotoverlord_api.database.models.flag import FlagStatus
+from therobotoverlord_api.database.models.flag import FlagSummary
+from therobotoverlord_api.database.models.flag import FlagUpdate
 from therobotoverlord_api.database.models.loyalty_score import (
     ContentType as LoyaltyContentType,
 )
@@ -97,6 +102,11 @@ __all__ = [
     "ContentVersionDiff",
     "ContentVersionSummary",
     "ConversationSummary",
+    "Flag",
+    "FlagCreate",
+    "FlagStatus",
+    "FlagSummary",
+    "FlagUpdate",
     "LoyaltyContentType",
     "LoyaltyEventFilters",
     "LoyaltyEventOutcome",

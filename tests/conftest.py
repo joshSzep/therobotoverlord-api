@@ -238,4 +238,22 @@ def get_appeal_service():
 @pytest.fixture
 def require_moderator():
     """Mock require_moderator dependency."""
-    return MagicMock(pk=uuid4(), role="moderator")
+    return MagicMock(pk=uuid4(), role=UserRole.MODERATOR)
+
+
+@pytest.fixture
+def citizen_user_headers():
+    """Mock headers for citizen user authentication."""
+    return {"Authorization": "Bearer mock_citizen_token"}
+
+
+@pytest.fixture
+def moderator_user_headers():
+    """Mock headers for moderator user authentication."""
+    return {"Authorization": "Bearer mock_moderator_token"}
+
+
+@pytest.fixture
+def mock_flag_service():
+    """Mock flag service for testing."""
+    return AsyncMock()
