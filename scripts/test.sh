@@ -8,8 +8,8 @@ echo "Running tests with coverage..."
 
 # Run pytest with coverage
 uv run pytest \
-    --verbose \
-    --cov=src/therobotoverlord_api \
+    --quiet \
+    --cov=src \
     --cov-report=html:htmlcov \
     --cov-report=term-missing \
     --cov-report=term \

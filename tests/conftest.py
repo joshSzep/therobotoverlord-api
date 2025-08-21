@@ -9,9 +9,12 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 
 from asyncpg import Record
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
+from httpx import ASGITransport
 
 from therobotoverlord_api.config.database import DatabaseSettings
 from therobotoverlord_api.database.models.base import UserRole
@@ -215,6 +218,13 @@ def mock_records(sample_user_data) -> list[Record]:
 def client():
     """FastAPI test client."""
     return TestClient(app)
+
+
+@pytest_asyncio.fixture
+async def async_client():
+    """Async FastAPI test client."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
 
 
 @pytest.fixture

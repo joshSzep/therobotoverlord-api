@@ -5,11 +5,13 @@ import secrets
 
 from uuid import UUID
 
+from therobotoverlord_api.auth.adjectives import ADJECTIVES_LIST
 from therobotoverlord_api.auth.google_oauth import GoogleOAuthService
 from therobotoverlord_api.auth.jwt_service import JWTService
 from therobotoverlord_api.auth.models import AuthResponse
 from therobotoverlord_api.auth.models import GoogleUserInfo
 from therobotoverlord_api.auth.models import TokenPair
+from therobotoverlord_api.auth.nouns import NOUNS_LIST
 from therobotoverlord_api.auth.session_service import SessionService
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.models.user import UserCreate
@@ -185,9 +187,9 @@ class AuthService:
 
         base_username = re.sub(r"[^a-zA-Z0-9]", "", base_username).lower()
 
-        # Ensure minimum length
+        # Ensure minimum length - generate natural citizen username
         if len(base_username) < 3:
-            base_username = "citizen"
+            base_username = self._generate_citizen_username()
 
         # Check if username is available
         username = base_username
@@ -203,6 +205,13 @@ class AuthService:
                 break
 
         return username
+
+    def _generate_citizen_username(self) -> str:
+        """Generate a natural citizen username using cryptographically secure random words."""
+        adjective = secrets.choice(ADJECTIVES_LIST)
+        noun = secrets.choice(NOUNS_LIST)
+        random_number = secrets.randbelow(65536)  # 16-bit number (0-65535)
+        return f"citizen-{adjective}-{noun}-{random_number}"
 
     async def _get_user_permissions(self, user: User) -> list[str]:
         """Get user permissions based on role and loyalty score."""
