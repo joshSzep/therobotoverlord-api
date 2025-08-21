@@ -139,7 +139,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import check_user_badge_eligibility
 
-        result = await check_user_badge_eligibility(user_id, mock_user)
+        result = await check_user_badge_eligibility(user_id, mock_user)  # type: ignore
 
         mock_service.evaluate_badge_criteria_for_user.assert_called_once_with(user_id)
         assert result == mock_eligibility
@@ -159,7 +159,7 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import check_user_badge_eligibility
 
         with pytest.raises(HTTPException) as exc_info:
-            await check_user_badge_eligibility(other_user_id, mock_user)
+            await check_user_badge_eligibility(other_user_id, mock_user)  # type: ignore
 
         exc = exc_info.value
         assert exc.status_code == 403
@@ -175,7 +175,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import delete_badge
 
-        await delete_badge(badge_id, mock_user)
+        await delete_badge(badge_id, mock_user)  # type: ignore
 
         mock_service.delete_badge.assert_called_once_with(badge_id)
 
@@ -190,7 +190,7 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import delete_badge
 
         with pytest.raises(HTTPException) as exc_info:
-            await delete_badge(badge_id, mock_user)
+            result = await delete_badge(badge_id, mock_user)  # type: ignore
 
         exc = exc_info.value
         assert exc.status_code == 404
@@ -215,7 +215,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import award_badge_manually
 
-        result = await award_badge_manually(user_id, badge_id, mock_user)
+        result = await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore
 
         mock_repo_instance.get_by_pk.assert_called_once_with(user_id)
         mock_service.manually_award_badge.assert_called_once_with(
@@ -239,7 +239,7 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import award_badge_manually
 
         with pytest.raises(HTTPException) as exc_info:
-            await award_badge_manually(user_id, badge_id, mock_user)
+            await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore
 
         exc = exc_info.value
         assert exc.status_code == 404
@@ -256,7 +256,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import revoke_badge
 
-        await revoke_badge(user_id, badge_id, mock_user)
+        await revoke_badge(user_id, badge_id, mock_user)  # type: ignore
 
         mock_service.revoke_badge.assert_called_once_with(user_id, badge_id)
 
@@ -272,7 +272,7 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import revoke_badge
 
         with pytest.raises(HTTPException) as exc_info:
-            await revoke_badge(user_id, badge_id, mock_user)
+            result = await revoke_badge(user_id, badge_id, mock_user)  # type: ignore
 
         exc = exc_info.value
         assert exc.status_code == 404
