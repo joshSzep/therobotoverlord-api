@@ -15,6 +15,8 @@ from therobotoverlord_api.database.repositories.queue import QueueOverviewReposi
 from therobotoverlord_api.database.repositories.queue import (
     TopicCreationQueueRepository,
 )
+from therobotoverlord_api.database.repositories.tag import TagRepository
+from therobotoverlord_api.database.repositories.tag import TopicTagRepository
 from therobotoverlord_api.database.repositories.topic import TopicRepository
 from therobotoverlord_api.database.repositories.user import UserRepository
 
@@ -25,7 +27,9 @@ __all__ = [
     "PrivateMessageQueueRepository",
     "PrivateMessageRepository",
     "QueueOverviewRepository",
+    "TagRepository",
     "TopicCreationQueueRepository",
     "TopicRepository",
+    "TopicTagRepository",
     "UserRepository",
 ]

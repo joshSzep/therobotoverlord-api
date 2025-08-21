@@ -139,7 +139,9 @@ class TestGetTopics:
         data = response.json()
         assert len(data) == 1
         assert data[0]["title"] == "Test Topic"
-        mock_repo.get_approved_topics.assert_called_once_with(limit=50, offset=0)
+        mock_repo.get_approved_topics.assert_called_once_with(
+            limit=50, offset=0, tag_names=None
+        )
 
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_get_topics_with_search(

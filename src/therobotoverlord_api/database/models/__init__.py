@@ -63,6 +63,13 @@ from therobotoverlord_api.database.models.queue import QueueStatusInfo
 from therobotoverlord_api.database.models.queue import QueueWithContent
 from therobotoverlord_api.database.models.queue import TopicCreationQueue
 from therobotoverlord_api.database.models.queue import TopicCreationQueueCreate
+from therobotoverlord_api.database.models.tag import Tag
+from therobotoverlord_api.database.models.tag import TagCreate
+from therobotoverlord_api.database.models.tag import TagUpdate
+from therobotoverlord_api.database.models.tag import TagWithTopicCount
+from therobotoverlord_api.database.models.tag import TopicTag
+from therobotoverlord_api.database.models.tag import TopicTagCreate
+from therobotoverlord_api.database.models.tag import TopicTagWithDetails
 from therobotoverlord_api.database.models.topic import Topic
 from therobotoverlord_api.database.models.topic import TopicCreate
 from therobotoverlord_api.database.models.topic import TopicSummary
@@ -122,12 +129,19 @@ __all__ = [
     "QueueStatusInfo",
     "QueueWithContent",
     "RestorationResult",
+    "Tag",
+    "TagCreate",
+    "TagUpdate",
+    "TagWithTopicCount",
     "Topic",
     "TopicCreate",
     "TopicCreationQueue",
     "TopicCreationQueueCreate",
     "TopicStatus",
     "TopicSummary",
+    "TopicTag",
+    "TopicTagCreate",
+    "TopicTagWithDetails",
     "TopicUpdate",
     "TopicWithAuthor",
     "UnreadMessageCount",

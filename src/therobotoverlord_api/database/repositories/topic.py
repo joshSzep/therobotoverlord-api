@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from asyncpg import Record
@@ -53,10 +54,10 @@ class TopicRepository(BaseRepository[Topic]):
             return [self._record_to_model(record) for record in records]
 
     async def get_approved_topics(
-        self, limit: int = 100, offset: int = 0
+        self, limit: int = 100, offset: int = 0, tag_names: list[str] | None = None
     ) -> list[TopicSummary]:
         """Get approved topics with summary information."""
-        query = """
+        base_query = """
             SELECT
                 t.pk,
                 t.title,
@@ -65,7 +66,8 @@ class TopicRepository(BaseRepository[Topic]):
                 t.status,
                 t.created_at,
                 u.username as author_username,
-                COALESCE(p.post_count, 0) as post_count
+                COALESCE(p.post_count, 0) as post_count,
+                COALESCE(tag_names.tags, '{}') as tags
             FROM topics t
             LEFT JOIN users u ON t.author_pk = u.pk
             LEFT JOIN (
@@ -74,13 +76,46 @@ class TopicRepository(BaseRepository[Topic]):
                 WHERE status = 'approved'
                 GROUP BY topic_pk
             ) p ON t.pk = p.topic_pk
+            LEFT JOIN (
+                SELECT
+                    tt.topic_pk,
+                    ARRAY_AGG(tg.name ORDER BY tg.name) as tags
+                FROM topic_tags tt
+                JOIN tags tg ON tt.tag_pk = tg.pk
+                GROUP BY tt.topic_pk
+            ) tag_names ON t.pk = tag_names.topic_pk
             WHERE t.status = 'approved'
-            ORDER BY t.created_at DESC
-            LIMIT $1 OFFSET $2
         """
 
+        params: list[Any] = []
+        param_count = 0
+
+        if tag_names:
+            # Filter by tags using EXISTS subquery
+            tag_filter = f"""
+                AND EXISTS (
+                    SELECT 1 FROM topic_tags tt2
+                    JOIN tags tg2 ON tt2.tag_pk = tg2.pk
+                    WHERE tt2.topic_pk = t.pk
+                    AND tg2.name = ANY(${param_count + 1})
+                )
+            """
+            base_query += tag_filter
+            params.append(tag_names)
+            param_count += 1
+
+        query = (
+            base_query
+            + f"""
+            ORDER BY t.created_at DESC
+            LIMIT ${param_count + 1} OFFSET ${param_count + 2}
+        """
+        )
+
+        params.extend([limit, offset])
+
         async with get_db_connection() as connection:
-            records = await connection.fetch(query, limit, offset)
+            records = await connection.fetch(query, *params)
             return [TopicSummary.model_validate(record) for record in records]
 
     async def get_with_author(self, pk: UUID) -> TopicWithAuthor | None:
@@ -88,9 +123,18 @@ class TopicRepository(BaseRepository[Topic]):
         query = """
             SELECT
                 t.*,
-                u.username as author_username
+                u.username as author_username,
+                COALESCE(tag_names.tags, '{}') as tags
             FROM topics t
             LEFT JOIN users u ON t.author_pk = u.pk
+            LEFT JOIN (
+                SELECT
+                    tt.topic_pk,
+                    ARRAY_AGG(tg.name ORDER BY tg.name) as tags
+                FROM topic_tags tt
+                JOIN tags tg ON tt.tag_pk = tg.pk
+                GROUP BY tt.topic_pk
+            ) tag_names ON t.pk = tag_names.topic_pk
             WHERE t.pk = $1
         """
 
@@ -116,7 +160,7 @@ class TopicRepository(BaseRepository[Topic]):
     async def search_topics(
         self, search_term: str, limit: int = 100, offset: int = 0
     ) -> list[TopicSummary]:
-        """Search topics by title and description."""
+        """Search topics by title, description, and tags."""
         query = """
             SELECT
                 t.pk,
@@ -126,7 +170,8 @@ class TopicRepository(BaseRepository[Topic]):
                 t.status,
                 t.created_at,
                 u.username as author_username,
-                COALESCE(p.post_count, 0) as post_count
+                COALESCE(p.post_count, 0) as post_count,
+                COALESCE(tag_names.tags, '{}') as tags
             FROM topics t
             LEFT JOIN users u ON t.author_pk = u.pk
             LEFT JOIN (
@@ -135,10 +180,24 @@ class TopicRepository(BaseRepository[Topic]):
                 WHERE status = 'approved'
                 GROUP BY topic_pk
             ) p ON t.pk = p.topic_pk
+            LEFT JOIN (
+                SELECT
+                    tt.topic_pk,
+                    ARRAY_AGG(tg.name ORDER BY tg.name) as tags
+                FROM topic_tags tt
+                JOIN tags tg ON tt.tag_pk = tg.pk
+                GROUP BY tt.topic_pk
+            ) tag_names ON t.pk = tag_names.topic_pk
             WHERE t.status = 'approved'
             AND (
                 t.title ILIKE $1
                 OR t.description ILIKE $1
+                OR EXISTS (
+                    SELECT 1 FROM topic_tags tt2
+                    JOIN tags tg2 ON tt2.tag_pk = tg2.pk
+                    WHERE tt2.topic_pk = t.pk
+                    AND tg2.name ILIKE $1
+                )
             )
             ORDER BY t.created_at DESC
             LIMIT $2 OFFSET $3
@@ -156,6 +215,7 @@ class TopicRepository(BaseRepository[Topic]):
             "status": TopicStatus.APPROVED.value,
             "approved_at": datetime.now(UTC),
             "approved_by": approved_by,
+            "approved_by_overlord": True,
         }
         return await self.update_from_dict(pk, data)
 
@@ -181,7 +241,8 @@ class TopicRepository(BaseRepository[Topic]):
                 t.status,
                 t.created_at,
                 'The Overlord' as author_username,
-                COALESCE(p.post_count, 0) as post_count
+                COALESCE(p.post_count, 0) as post_count,
+                COALESCE(tag_names.tags, '{}') as tags
             FROM topics t
             LEFT JOIN (
                 SELECT topic_pk, COUNT(*) as post_count
@@ -189,6 +250,14 @@ class TopicRepository(BaseRepository[Topic]):
                 WHERE status = 'approved'
                 GROUP BY topic_pk
             ) p ON t.pk = p.topic_pk
+            LEFT JOIN (
+                SELECT
+                    tt.topic_pk,
+                    ARRAY_AGG(tg.name ORDER BY tg.name) as tags
+                FROM topic_tags tt
+                JOIN tags tg ON tt.tag_pk = tg.pk
+                GROUP BY tt.topic_pk
+            ) tag_names ON t.pk = tag_names.topic_pk
             WHERE t.created_by_overlord = true
             AND t.status = 'approved'
             ORDER BY t.created_at DESC
@@ -197,4 +266,52 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
+            return [TopicSummary.model_validate(record) for record in records]
+
+    async def get_related_topics(
+        self, topic_pk: UUID, limit: int = 5
+    ) -> list[TopicSummary]:
+        """Get topics that share tags with the given topic."""
+        query = """
+            SELECT DISTINCT
+                t.pk,
+                t.title,
+                t.description,
+                t.created_by_overlord,
+                t.status,
+                t.created_at,
+                u.username as author_username,
+                COALESCE(p.post_count, 0) as post_count,
+                COALESCE(tag_names.tags, '{}') as tags,
+                COUNT(shared_tags.tag_pk) as shared_tag_count
+            FROM topics t
+            LEFT JOIN users u ON t.author_pk = u.pk
+            LEFT JOIN (
+                SELECT topic_pk, COUNT(*) as post_count
+                FROM posts
+                WHERE status = 'approved'
+                GROUP BY topic_pk
+            ) p ON t.pk = p.topic_pk
+            LEFT JOIN (
+                SELECT
+                    tt.topic_pk,
+                    ARRAY_AGG(tg.name ORDER BY tg.name) as tags
+                FROM topic_tags tt
+                JOIN tags tg ON tt.tag_pk = tg.pk
+                GROUP BY tt.topic_pk
+            ) tag_names ON t.pk = tag_names.topic_pk
+            JOIN topic_tags shared_tags ON t.pk = shared_tags.topic_pk
+            WHERE t.status = 'approved'
+            AND t.pk != $1
+            AND shared_tags.tag_pk IN (
+                SELECT tag_pk FROM topic_tags WHERE topic_pk = $1
+            )
+            GROUP BY t.pk, t.title, t.description, t.created_by_overlord,
+                     t.status, t.created_at, u.username, p.post_count, tag_names.tags
+            ORDER BY shared_tag_count DESC, t.created_at DESC
+            LIMIT $2
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, topic_pk, limit)
             return [TopicSummary.model_validate(record) for record in records]

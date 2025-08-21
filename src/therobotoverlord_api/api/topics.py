@@ -29,6 +29,11 @@ from therobotoverlord_api.services.queue_service import get_queue_service
 
 router = APIRouter(prefix="/topics", tags=["topics"])
 
+# Authentication dependencies for testing
+admin_dependency = require_role(UserRole.ADMIN)
+moderator_dependency = require_role(UserRole.MODERATOR)
+citizen_dependency = require_role(UserRole.CITIZEN)
+
 
 @router.get("/")
 async def get_topics(
@@ -36,6 +41,7 @@ async def get_topics(
     offset: Annotated[int, Query(ge=0)] = 0,
     search: Annotated[str | None, Query(max_length=100)] = None,
     overlord_only: Annotated[bool, Query()] = False,  # noqa: FBT002
+    tags: Annotated[list[str] | None, Query()] = None,
 ) -> list[TopicSummary]:
     """Get approved topics with optional search and filtering."""
     topic_repo = TopicRepository()
@@ -44,7 +50,9 @@ async def get_topics(
         return await topic_repo.get_overlord_topics(limit=limit, offset=offset)
     if search:
         return await topic_repo.search_topics(search, limit=limit, offset=offset)
-    return await topic_repo.get_approved_topics(limit=limit, offset=offset)
+    return await topic_repo.get_approved_topics(
+        limit=limit, offset=offset, tag_names=tags
+    )
 
 
 @router.get("/{topic_id}")
@@ -112,8 +120,25 @@ async def create_topic(
     return topic
 
 
-# Create dependency instances to avoid function calls in defaults
-moderator_dependency = require_role(UserRole.MODERATOR)
+@router.get("/{topic_id}/related")
+async def get_related_topics(
+    topic_id: UUID,
+    limit: Annotated[int, Query(le=10, ge=1)] = 5,
+) -> list[TopicSummary]:
+    """Get topics related by shared tags."""
+    topic_repo = TopicRepository()
+
+    # Verify the topic exists and is approved
+    topic = await topic_repo.get_with_author(topic_id)
+    if not topic or topic.status != TopicStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found"
+        )
+
+    return await topic_repo.get_related_topics(topic_id, limit=limit)
+
+
+# Remove duplicate - using the dependency defined above
 
 
 @router.patch("/{topic_id}/approve")

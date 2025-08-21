@@ -239,6 +239,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/api/v1/auth/jwks",
             "/api/v1/queue/overview",
             "/api/v1/leaderboard",
+            "/api/v1/tags",
             "/docs",
             "/openapi.json",
             "/health",

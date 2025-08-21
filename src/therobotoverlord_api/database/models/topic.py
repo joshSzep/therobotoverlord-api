@@ -59,6 +59,7 @@ class TopicWithAuthor(BaseModel):
     approved_by: UUID | None
     created_at: datetime
     updated_at: datetime | None
+    tags: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,5 +75,6 @@ class TopicSummary(BaseModel):
     status: TopicStatus
     created_at: datetime
     post_count: int = 0
+    tags: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
