@@ -1,6 +1,7 @@
 """Sanction service for The Robot Overlord API."""
 
 import logging
+
 from uuid import UUID
 
 from therobotoverlord_api.database.models.sanction import Sanction
@@ -31,7 +32,7 @@ class SanctionService:
         self,
         sanction_data: SanctionCreate,
         applied_by_pk: UUID,
-    ) -> Sanction:
+    ) -> Sanction | None:
         """Apply a sanction to a user."""
         # Validate that the user exists
         user = await self.user_repository.get_by_pk(sanction_data.user_pk)
@@ -52,6 +53,13 @@ class SanctionService:
         # Update user sanction status if needed
         await self._update_user_sanction_status(sanction_data.user_pk)
 
+        if sanction is None:
+            logger.error(
+                f"Failed to create sanction for user {sanction_data.user_pk} "
+                f"by {applied_by_pk}. Reason: {sanction_data.reason}"
+            )
+            return None
+
         logger.info(
             f"Sanction {sanction.type} applied to user {sanction_data.user_pk} "
             f"by {applied_by_pk}. Reason: {sanction_data.reason}"
@@ -70,9 +78,9 @@ class SanctionService:
         """Get sanctions for a specific user."""
         return await self.sanction_repository.get_sanctions_by_user(
             user_pk,
-            active_only,
-            limit,
-            offset,
+            active_only=active_only,
+            limit=limit,
+            offset=offset,
         )
 
     async def get_all_sanctions(
@@ -85,10 +93,10 @@ class SanctionService:
     ) -> list[SanctionWithDetails]:
         """Get all sanctions with user details for admin view."""
         return await self.sanction_repository.get_all_sanctions(
-            sanction_type,
-            active_only,
-            limit,
-            offset,
+            sanction_type=sanction_type,
+            active_only=active_only,
+            limit=limit,
+            offset=offset,
         )
 
     async def update_sanction(

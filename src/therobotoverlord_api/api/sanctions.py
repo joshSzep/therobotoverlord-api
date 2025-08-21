@@ -37,7 +37,7 @@ async def apply_sanction(
     sanction_data: SanctionCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
-) -> Sanction:
+) -> Sanction | None:
     """Apply a sanction to a user (moderators and admins only)."""
     require_moderator_or_admin(current_user)
 
@@ -58,7 +58,8 @@ async def get_all_sanctions(
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
     sanction_type: Annotated[SanctionType | None, Query()] = None,
-    active_only: Annotated[bool, Query()] = False,
+    *,
+    active_only: bool = False,
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SanctionWithDetails]:
@@ -67,9 +68,9 @@ async def get_all_sanctions(
 
     return await sanction_service.get_all_sanctions(
         sanction_type,
-        active_only,
-        limit,
-        offset,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -156,9 +157,9 @@ async def get_user_sanctions(
 
     return await sanction_service.get_user_sanctions(
         user_id,
-        active_only,
-        limit,
-        offset,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
     )
 
 

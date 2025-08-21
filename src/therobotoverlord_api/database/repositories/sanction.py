@@ -31,7 +31,7 @@ class SanctionRepository(BaseRepository[Sanction]):
         self,
         sanction_data: SanctionCreate,
         applied_by_pk: UUID,
-    ) -> Sanction:
+    ) -> Sanction | None:
         """Create a new sanction."""
         query = """
             INSERT INTO sanctions (user_pk, type, applied_by_pk, expires_at, reason)
@@ -48,6 +48,8 @@ class SanctionRepository(BaseRepository[Sanction]):
                 sanction_data.expires_at,
                 sanction_data.reason,
             )
+            if record is None:
+                return None
             return self._record_to_model(record)
 
     async def get_sanctions_by_user(
@@ -91,17 +93,17 @@ class SanctionRepository(BaseRepository[Sanction]):
     ) -> list[SanctionWithDetails]:
         """Get all sanctions with user details for admin view."""
         where_conditions = []
-        params = []
+        params: list[str | bool] = []
         param_count = 0
 
         if sanction_type:
             param_count += 1
-            where_conditions.append(f"s.type = ${param_count}")
+            where_conditions.append(f"type = ${param_count}")
             params.append(sanction_type.value)
 
         if active_only:
             param_count += 1
-            where_conditions.append(f"s.is_active = ${param_count}")
+            where_conditions.append(f"is_active = ${param_count}")
             params.append(True)
 
         where_clause = ""
@@ -109,7 +111,7 @@ class SanctionRepository(BaseRepository[Sanction]):
             where_clause = "WHERE " + " AND ".join(where_conditions)
 
         query = f"""
-            SELECT 
+            SELECT
                 s.*,
                 u.username,
                 applied_by.username as applied_by_username
@@ -117,6 +119,7 @@ class SanctionRepository(BaseRepository[Sanction]):
             JOIN users u ON s.user_pk = u.pk
             JOIN users applied_by ON s.applied_by_pk = applied_by.pk
             {where_clause}
+            AND (expires_at IS NULL OR expires_at > NOW())
             ORDER BY s.applied_at DESC
             LIMIT ${param_count + 1} OFFSET ${param_count + 2}
         """
@@ -161,7 +164,7 @@ class SanctionRepository(BaseRepository[Sanction]):
 
         query = f"""
             UPDATE sanctions
-            SET {', '.join(set_clauses)}
+            SET {", ".join(set_clauses)}
             WHERE pk = ${param_count + 1}
             RETURNING *
         """
@@ -172,7 +175,9 @@ class SanctionRepository(BaseRepository[Sanction]):
                 *params,
                 sanction_pk,
             )
-            return self._record_to_model(record) if record else None
+            if record is None:
+                return None
+            return self._record_to_model(record)
 
     async def deactivate_sanction(self, sanction_pk: UUID) -> bool:
         """Deactivate a sanction."""
@@ -187,7 +192,7 @@ class SanctionRepository(BaseRepository[Sanction]):
             record = await connection.fetchrow(query, sanction_pk)
             return record is not None
 
-    async def get_active_sanctions_by_user(self, user_pk: UUID) -> list[Sanction]:
+    async def get_active_sanctions_by_user(self, user_pk: UUID) -> Sanction | None:
         """Get all active sanctions for a user."""
         query = """
             SELECT * FROM sanctions
@@ -198,8 +203,10 @@ class SanctionRepository(BaseRepository[Sanction]):
         """
 
         async with get_db_connection() as connection:
-            records = await connection.fetch(query, user_pk)
-            return [self._record_to_model(record) for record in records]
+            record = await connection.fetchrow(query, user_pk)
+        if record is None:
+            return None
+        return self._record_to_model(record)
 
     async def expire_sanctions(self) -> int:
         """Expire sanctions that have passed their expiration date."""
@@ -225,7 +232,7 @@ class SanctionRepository(BaseRepository[Sanction]):
     ) -> int:
         """Get count of sanctions for a user."""
         where_conditions = ["user_pk = $1"]
-        params = [user_pk]
+        params: list[UUID | str | bool] = [user_pk]
         param_count = 1
 
         if sanction_type:
