@@ -18,6 +18,7 @@ from therobotoverlord_api.api.rbac import router as rbac_router
 from therobotoverlord_api.api.tags import router as tags_router
 from therobotoverlord_api.api.topics import router as topics_router
 from therobotoverlord_api.api.translations import router as translations_router
+from therobotoverlord_api.api.users import router as users_router
 from therobotoverlord_api.auth.middleware import AuthenticationMiddleware
 from therobotoverlord_api.database.connection import close_database
 from therobotoverlord_api.database.connection import db
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(tags_router, prefix="/api/v1")
     app.include_router(topics_router, prefix="/api/v1")
     app.include_router(translations_router, prefix="/api/v1")
+    app.include_router(users_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():
