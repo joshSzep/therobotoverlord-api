@@ -26,7 +26,7 @@ class TestLoyaltyScoreAPISimple:
 
         from therobotoverlord_api.api.loyalty_score import get_my_loyalty_profile
 
-        result = await get_my_loyalty_profile(mock_user)  # type: ignore
+        result = await get_my_loyalty_profile(mock_user)  # type: ignore[arg-type]
 
         mock_service.get_user_loyalty_profile.assert_called_once_with(mock_user.pk)
         assert result == mock_profile
@@ -45,11 +45,11 @@ class TestLoyaltyScoreAPISimple:
         from therobotoverlord_api.api.loyalty_score import get_my_loyalty_profile
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_my_loyalty_profile(mock_user)  # type: ignore
+            await get_my_loyalty_profile(mock_user)  # type: ignore[arg-type]
 
         exc = exc_info.value
-        assert exc.status_code == 404
-        assert "User not found" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "User not found" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.loyalty_score.get_loyalty_score_service")
@@ -82,7 +82,7 @@ class TestLoyaltyScoreAPISimple:
 
         from therobotoverlord_api.api.loyalty_score import get_my_score_breakdown
 
-        result = await get_my_score_breakdown(mock_user)  # type: ignore
+        result = await get_my_score_breakdown(mock_user)  # type: ignore[arg-type]
 
         mock_service.get_user_score_breakdown.assert_called_once_with(mock_user.pk)
         assert result == mock_breakdown
@@ -120,5 +120,5 @@ class TestLoyaltyScoreAPISimple:
 
         exc = exc_info.value
         assert isinstance(exc, HTTPException)
-        assert exc.status_code == 404
-        assert "User not found" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "User not found" in str(exc.detail)  # type: ignore[attr-defined]

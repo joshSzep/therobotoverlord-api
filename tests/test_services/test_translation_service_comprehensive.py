@@ -70,7 +70,7 @@ class TestTranslationService:
     @pytest.mark.asyncio
     async def test_detect_language_chinese_content(self, service):
         """Test language detection for Chinese content."""
-        chinese_content = "你好世界，这是一个测试消息。"
+        chinese_content = "你好世界,这是一个测试消息。"
 
         result = await service.detect_language(chinese_content)
 

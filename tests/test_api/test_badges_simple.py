@@ -59,8 +59,9 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await get_badge(badge_id)
 
-        assert exc_info.value.status_code == 404
-        assert "Badge not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "Badge not found" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.badge_service")
@@ -120,8 +121,8 @@ class TestBadgesAPISimple:
             await get_user_badge_summary(user_id)
 
         exc = exc_info.value
-        assert exc.status_code == 404
-        assert "User not found" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "User not found" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.RBACService")
@@ -139,7 +140,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import check_user_badge_eligibility
 
-        result = await check_user_badge_eligibility(user_id, mock_user)  # type: ignore
+        result = await check_user_badge_eligibility(user_id, mock_user)  # type: ignore[arg-type]
 
         mock_service.evaluate_badge_criteria_for_user.assert_called_once_with(user_id)
         assert result == mock_eligibility
@@ -159,11 +160,11 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import check_user_badge_eligibility
 
         with pytest.raises(HTTPException) as exc_info:
-            await check_user_badge_eligibility(other_user_id, mock_user)  # type: ignore
+            await check_user_badge_eligibility(other_user_id, mock_user)  # type: ignore[arg-type]
 
         exc = exc_info.value
-        assert exc.status_code == 403
-        assert "Cannot check other users' badge eligibility" in str(exc.detail)
+        assert exc.status_code == 403  # type: ignore[attr-defined]
+        assert "Cannot check other users' badge eligibility" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.badge_service")
@@ -175,7 +176,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import delete_badge
 
-        await delete_badge(badge_id, mock_user)  # type: ignore
+        await delete_badge(badge_id, mock_user)  # type: ignore[arg-type]
 
         mock_service.delete_badge.assert_called_once_with(badge_id)
 
@@ -190,11 +191,11 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import delete_badge
 
         with pytest.raises(HTTPException) as exc_info:
-            result = await delete_badge(badge_id, mock_user)  # type: ignore
+            result = await delete_badge(badge_id, mock_user)  # type: ignore[arg-type]
 
         exc = exc_info.value
-        assert exc.status_code == 404
-        assert "Badge not found" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "Badge not found" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.UserRepository")
@@ -215,7 +216,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import award_badge_manually
 
-        result = await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore
+        result = await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore[arg-type]
 
         mock_repo_instance.get_by_pk.assert_called_once_with(user_id)
         mock_service.manually_award_badge.assert_called_once_with(
@@ -239,11 +240,11 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import award_badge_manually
 
         with pytest.raises(HTTPException) as exc_info:
-            await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore
+            await award_badge_manually(user_id, badge_id, mock_user)  # type: ignore[arg-type]
 
         exc = exc_info.value
-        assert exc.status_code == 404
-        assert "User not found" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "User not found" in str(exc.detail)  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.badge_service")
@@ -256,7 +257,7 @@ class TestBadgesAPISimple:
 
         from therobotoverlord_api.api.badges import revoke_badge
 
-        await revoke_badge(user_id, badge_id, mock_user)  # type: ignore
+        await revoke_badge(user_id, badge_id, mock_user)  # type: ignore[arg-type]
 
         mock_service.revoke_badge.assert_called_once_with(user_id, badge_id)
 
@@ -272,8 +273,8 @@ class TestBadgesAPISimple:
         from therobotoverlord_api.api.badges import revoke_badge
 
         with pytest.raises(HTTPException) as exc_info:
-            result = await revoke_badge(user_id, badge_id, mock_user)  # type: ignore
+            result = await revoke_badge(user_id, badge_id, mock_user)  # type: ignore[arg-type]
 
         exc = exc_info.value
-        assert exc.status_code == 404
-        assert "User does not have this badge" in str(exc.detail)
+        assert exc.status_code == 404  # type: ignore[attr-defined]
+        assert "User does not have this badge" in str(exc.detail)  # type: ignore[attr-defined]
