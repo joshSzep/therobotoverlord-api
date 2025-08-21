@@ -122,7 +122,7 @@ class TestAppealRepository:
         appeal_update = AppealUpdate(
             status=AppealStatus.UNDER_REVIEW,
             review_notes="Under review",
-            decision_reason="Decision pending"
+            decision_reason="Decision pending",
         )
         mock_appeal = Appeal(
             pk=appeal_pk,
@@ -142,7 +142,12 @@ class TestAppealRepository:
         result = await repository.update_appeal(appeal_pk, appeal_update)
 
         mock_update.assert_called_once_with(
-            appeal_pk, {"status": "under_review", "review_notes": "Under review"}
+            appeal_pk,
+            {
+                "status": "under_review",
+                "review_notes": "Under review",
+                "decision_reason": "Decision pending",
+            },
         )
         assert result == mock_appeal
 

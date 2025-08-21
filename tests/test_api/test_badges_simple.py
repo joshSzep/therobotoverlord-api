@@ -119,8 +119,9 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await get_user_badge_summary(user_id)
 
-        assert exc_info.value.status_code == 404
-        assert "User not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "User not found" in str(exc.detail)
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.RBACService")
@@ -160,10 +161,9 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await check_user_badge_eligibility(other_user_id, mock_user)
 
-        assert exc_info.value.status_code == 403
-        assert "Cannot check other users' badge eligibility" in str(
-            exc_info.value.detail
-        )
+        exc = exc_info.value
+        assert exc.status_code == 403
+        assert "Cannot check other users' badge eligibility" in str(exc.detail)
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.badge_service")
@@ -192,8 +192,9 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await delete_badge(badge_id, mock_user)
 
-        assert exc_info.value.status_code == 404
-        assert "Badge not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "Badge not found" in str(exc.detail)
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.UserRepository")
@@ -240,8 +241,9 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await award_badge_manually(user_id, badge_id, mock_user)
 
-        assert exc_info.value.status_code == 404
-        assert "User not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "User not found" in str(exc.detail)
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.badges.badge_service")
@@ -272,5 +274,6 @@ class TestBadgesAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await revoke_badge(user_id, badge_id, mock_user)
 
-        assert exc_info.value.status_code == 404
-        assert "User does not have this badge" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "User does not have this badge" in str(exc.detail)

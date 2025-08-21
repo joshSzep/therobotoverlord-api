@@ -47,8 +47,9 @@ class TestLoyaltyScoreAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await get_my_loyalty_profile(mock_user)
 
-        assert exc_info.value.status_code == 404
-        assert "User not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "User not found" in str(exc.detail)
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.api.loyalty_score.get_loyalty_score_service")
@@ -117,5 +118,6 @@ class TestLoyaltyScoreAPISimple:
         with pytest.raises(HTTPException) as exc_info:
             await get_user_score_breakdown(user_pk)
 
-        assert exc_info.value.status_code == 404
-        assert "User not found" in str(exc_info.value.detail)
+        exc = exc_info.value
+        assert exc.status_code == 404
+        assert "User not found" in str(exc.detail)
