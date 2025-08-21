@@ -85,6 +85,11 @@ from therobotoverlord_api.database.models.user import UserCreate
 from therobotoverlord_api.database.models.user import UserLeaderboard
 from therobotoverlord_api.database.models.user import UserProfile
 from therobotoverlord_api.database.models.user import UserUpdate
+from therobotoverlord_api.database.models.sanction import Sanction
+from therobotoverlord_api.database.models.sanction import SanctionCreate
+from therobotoverlord_api.database.models.sanction import SanctionType
+from therobotoverlord_api.database.models.sanction import SanctionUpdate
+from therobotoverlord_api.database.models.sanction import SanctionWithDetails
 
 __all__ = [
     "Badge",
@@ -166,4 +171,9 @@ __all__ = [
     "UserProfile",
     "UserRole",
     "UserUpdate",
+    "Sanction",
+    "SanctionCreate",
+    "SanctionType",
+    "SanctionUpdate",
+    "SanctionWithDetails",
 ]

@@ -157,3 +157,8 @@ class UserRepository(BaseRepository[User]):
     async def get_banned_users(self) -> list[User]:
         """Get all banned users."""
         return await self.find_by(is_banned=True)
+
+
+def get_user_repository() -> UserRepository:
+    """Get user repository instance."""
+    return UserRepository()

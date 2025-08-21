@@ -15,6 +15,7 @@ from therobotoverlord_api.api.messages import router as messages_router
 from therobotoverlord_api.api.posts import router as posts_router
 from therobotoverlord_api.api.queue import router as queue_router
 from therobotoverlord_api.api.rbac import router as rbac_router
+from therobotoverlord_api.api.sanctions import router as sanctions_router
 from therobotoverlord_api.api.tags import router as tags_router
 from therobotoverlord_api.api.topics import router as topics_router
 from therobotoverlord_api.api.translations import router as translations_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(posts_router, prefix="/api/v1")
     app.include_router(queue_router, prefix="/api/v1")
     app.include_router(rbac_router)
+    app.include_router(sanctions_router, prefix="/api/v1")
     app.include_router(tags_router, prefix="/api/v1")
     app.include_router(topics_router, prefix="/api/v1")
     app.include_router(translations_router, prefix="/api/v1")
