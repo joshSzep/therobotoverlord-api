@@ -1,5 +1,14 @@
 """Database models for The Robot Overlord API."""
 
+from therobotoverlord_api.database.models.badge import Badge
+from therobotoverlord_api.database.models.badge import BadgeCreate
+from therobotoverlord_api.database.models.badge import BadgeEligibilityCheck
+from therobotoverlord_api.database.models.badge import BadgeType
+from therobotoverlord_api.database.models.badge import BadgeUpdate
+from therobotoverlord_api.database.models.badge import UserBadge
+from therobotoverlord_api.database.models.badge import UserBadgeCreate
+from therobotoverlord_api.database.models.badge import UserBadgeSummary
+from therobotoverlord_api.database.models.badge import UserBadgeWithDetails
 from therobotoverlord_api.database.models.base import BaseDBModel
 from therobotoverlord_api.database.models.base import ContentStatus
 from therobotoverlord_api.database.models.base import ContentType
@@ -66,6 +75,11 @@ from therobotoverlord_api.database.models.user import UserProfile
 from therobotoverlord_api.database.models.user import UserUpdate
 
 __all__ = [
+    "Badge",
+    "BadgeCreate",
+    "BadgeEligibilityCheck",
+    "BadgeType",
+    "BadgeUpdate",
     "BaseDBModel",
     "ContentRestoration",
     "ContentRestorationCreate",
@@ -118,6 +132,10 @@ __all__ = [
     "TopicWithAuthor",
     "UnreadMessageCount",
     "User",
+    "UserBadge",
+    "UserBadgeCreate",
+    "UserBadgeSummary",
+    "UserBadgeWithDetails",
     "UserCreate",
     "UserLeaderboard",
     "UserLoyaltyProfile",
