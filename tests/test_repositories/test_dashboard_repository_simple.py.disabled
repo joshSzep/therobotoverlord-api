@@ -1,0 +1,91 @@
+"""Simplified tests for DashboardRepository."""
+
+from datetime import UTC
+from datetime import datetime
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+from uuid import uuid4
+
+import pytest
+
+from therobotoverlord_api.database.models.dashboard_snapshot import DashboardSnapshotCreate
+from therobotoverlord_api.database.models.dashboard_snapshot import DashboardSnapshotType
+from therobotoverlord_api.database.repositories.dashboard import DashboardRepository
+
+
+class TestDashboardRepository:
+    """Test class for DashboardRepository."""
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.repositories.dashboard.get_db_connection")
+    async def test_create_snapshot(self, mock_get_connection):
+        """Test creating a dashboard snapshot."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+        mock_connection.fetchrow.return_value = {
+            "pk": uuid4(),
+            "snapshot_type": DashboardSnapshotType.DAILY,
+            "period_start": datetime.now(UTC),
+            "period_end": datetime.now(UTC),
+            "metrics_data": {"users": 100, "posts": 50},
+            "generated_at": datetime.now(UTC),
+            "created_at": datetime.now(UTC),
+            "updated_at": None,
+        }
+
+        repository = DashboardRepository()
+        snapshot_create = DashboardSnapshotCreate(
+            snapshot_type=DashboardSnapshotType.DAILY,
+            period_start=datetime.now(UTC),
+            period_end=datetime.now(UTC),
+            metrics_data={"users": 100, "posts": 50},
+        )
+
+        result = await repository.create_snapshot(snapshot_create)
+
+        assert result is not None
+        mock_connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.repositories.dashboard.get_db_connection")
+    async def test_get_latest_snapshot(self, mock_get_connection):
+        """Test getting the latest snapshot."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+        mock_connection.fetchrow.return_value = {
+            "pk": uuid4(),
+            "snapshot_type": DashboardSnapshotType.DAILY,
+            "period_start": datetime.now(UTC),
+            "period_end": datetime.now(UTC),
+            "metrics_data": {"users": 100, "posts": 50},
+            "generated_at": datetime.now(UTC),
+            "created_at": datetime.now(UTC),
+            "updated_at": None,
+        }
+
+        repository = DashboardRepository()
+        result = await repository.get_latest_snapshot(DashboardSnapshotType.DAILY)
+
+        assert result is not None
+        mock_connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.repositories.dashboard.get_db_connection")
+    async def test_get_latest_snapshot_not_found(self, mock_get_connection):
+        """Test getting latest snapshot when none exists."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+        mock_connection.fetchrow.return_value = None
+
+        repository = DashboardRepository()
+        result = await repository.get_latest_snapshot(DashboardSnapshotType.DAILY)
+
+        assert result is None
+        mock_connection.fetchrow.assert_called_once()
+
+    def test_repository_initialization(self):
+        """Test repository can be initialized."""
+        repository = DashboardRepository()
+        assert repository.table_name == "dashboard_snapshots"

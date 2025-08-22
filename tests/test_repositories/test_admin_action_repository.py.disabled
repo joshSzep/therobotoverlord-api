@@ -1,0 +1,128 @@
+"""Tests for AdminActionRepository."""
+
+from datetime import UTC
+from datetime import datetime
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+from uuid import uuid4
+
+import pytest
+
+from therobotoverlord_api.database.models.admin_action import AdminActionCreate
+from therobotoverlord_api.database.models.admin_action import AdminActionType
+from therobotoverlord_api.database.repositories.admin_action import AdminActionRepository
+
+
+class TestAdminActionRepository:
+    """Test class for AdminActionRepository."""
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.connection.get_db_connection")
+    async def test_create_admin_action(self, mock_get_connection):
+        """Test creating an admin action."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+        mock_connection.fetchrow.return_value = {
+            "pk": uuid4(),
+            "admin_pk": uuid4(),
+            "action_type": AdminActionType.USER_ROLE_CHANGE,
+            "target_type": "user",
+            "target_pk": uuid4(),
+            "description": "Test admin action",
+            "metadata": {"test": "data"},
+            "ip_address": "127.0.0.1",
+            "created_at": datetime.now(UTC),
+            "updated_at": None,
+        }
+
+        repository = AdminActionRepository()
+        admin_action_create = AdminActionCreate(
+            admin_pk=uuid4(),
+            action_type=AdminActionType.USER_ROLE_CHANGE,
+            target_type="user",
+            target_pk=uuid4(),
+            description="Test admin action",
+            metadata={"test": "data"},
+            ip_address="127.0.0.1",
+        )
+
+        result = await repository.create_action(admin_action_create)
+
+        assert result is not None
+        mock_connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.connection.get_db_connection")
+    async def test_get_by_pk(self, mock_get_connection):
+        """Test getting admin action by primary key."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+        pk = uuid4()
+        mock_connection.fetchrow.return_value = {
+            "pk": pk,
+            "admin_pk": uuid4(),
+            "action_type": AdminActionType.USER_ROLE_CHANGE,
+            "target_type": "user",
+            "target_pk": uuid4(),
+            "description": "Test admin action",
+            "metadata": {"test": "data"},
+            "ip_address": "127.0.0.1",
+            "created_at": datetime.now(UTC),
+            "updated_at": None,
+        }
+
+        repository = AdminActionRepository()
+        result = await repository.get_by_pk(pk)
+
+        assert result is not None
+        assert result.pk == pk
+        mock_connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.connection.get_db_connection")
+    async def test_get_by_pk_not_found(self, mock_get_connection):
+        """Test getting admin action by primary key when not found."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+        mock_connection.fetchrow.return_value = None
+
+        repository = AdminActionRepository()
+        result = await repository.get_by_pk(uuid4())
+
+        assert result is None
+        mock_connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.database.connection.get_db_connection")
+    async def test_get_recent_actions(self, mock_get_connection):
+        """Test getting recent admin actions."""
+        mock_connection = AsyncMock()
+        mock_get_connection.return_value.__aenter__.return_value = mock_connection
+
+        mock_connection.fetch.return_value = [
+            {
+                "pk": uuid4(),
+                "admin_pk": uuid4(),
+                "action_type": AdminActionType.USER_ROLE_CHANGE,
+                "target_type": "user",
+                "target_pk": uuid4(),
+                "description": "Test admin action",
+                "metadata": {"test": "data"},
+                "ip_address": "127.0.0.1",
+                "created_at": datetime.now(UTC),
+                "updated_at": None,
+            }
+        ]
+
+        repository = AdminActionRepository()
+        result = await repository.get_recent_actions(limit=10, offset=0)
+
+        assert len(result) == 1
+        mock_connection.fetch.assert_called_once()
+
+    def test_repository_initialization(self):
+        """Test repository can be initialized."""
+        repository = AdminActionRepository()
+        assert repository.table_name == "admin_actions"

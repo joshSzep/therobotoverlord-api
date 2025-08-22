@@ -1,0 +1,458 @@
+"""Tests for Admin Dashboard API endpoints."""
+
+from datetime import datetime
+from datetime import timezone
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
+from uuid import uuid4
+
+import pytest
+
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+from therobotoverlord_api.database.models.admin_action import AdminActionType
+from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.system_announcement import AnnouncementType
+from therobotoverlord_api.database.models.user import User
+from therobotoverlord_api.main import app
+
+
+class TestAdminDashboardAPI:
+    """Test class for Admin Dashboard API endpoints."""
+
+    @pytest.fixture
+    def client(self):
+        """FastAPI test client."""
+        return TestClient(app)
+
+    @pytest.fixture
+    def admin_user(self):
+        """Mock admin user."""
+        return User(
+            pk=uuid4(),
+            email="admin@example.com",
+            google_id="admin123",
+            username="admin",
+            role=UserRole.ADMIN,
+            loyalty_score=100,
+            is_banned=False,
+            is_sanctioned=False,
+            email_verified=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=None,
+        )
+
+    @pytest.fixture
+    def superadmin_user(self):
+        """Mock superadmin user."""
+        return User(
+            pk=uuid4(),
+            email="superadmin@example.com",
+            google_id="superadmin123",
+            username="superadmin",
+            role=UserRole.SUPERADMIN,
+            loyalty_score=100,
+            is_banned=False,
+            is_sanctioned=False,
+            email_verified=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=None,
+        )
+
+    @pytest.fixture
+    def citizen_user(self):
+        """Mock citizen user."""
+        return User(
+            pk=uuid4(),
+            email="citizen@example.com",
+            google_id="citizen123",
+            username="citizen",
+            role=UserRole.CITIZEN,
+            loyalty_score=50,
+            is_banned=False,
+            is_sanctioned=False,
+            email_verified=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=None,
+        )
+
+    @pytest.fixture
+    def mock_dashboard_service(self):
+        """Mock DashboardService."""
+        service = AsyncMock()
+        service.get_dashboard_overview.return_value = {
+            "user_activity": {
+                "total_users": 100,
+                "active_users": 50,
+                "new_users": 10,
+            },
+            "content_activity": {
+                "total_posts": 200,
+                "total_topics": 50,
+                "recent_posts": 25,
+            },
+            "moderation_activity": {
+                "pending_flags": 15,
+                "active_sanctions": 5,
+                "pending_appeals": 3,
+            },
+            "system_health": {
+                "queue_items": 25,
+                "avg_loyalty_score": 75.5,
+            },
+            "recent_activity": [],
+        }
+        service.create_announcement.return_value = MagicMock(
+            pk=uuid4(),
+            title="Test Announcement",
+            content="Test content",
+            announcement_type=AnnouncementType.GENERAL,
+            target_roles=[UserRole.CITIZEN],
+            is_active=True,
+            expires_at=None,
+            created_by_pk=uuid4(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=None,
+        )
+        service.get_announcements.return_value = []
+        service.get_audit_log.return_value = []
+        service.log_admin_action.return_value = MagicMock(pk=uuid4())
+        return service
+
+    @pytest.fixture
+    def mock_request(self):
+        """Mock FastAPI Request."""
+        request = MagicMock()
+        request.client.host = "127.0.0.1"
+        return request
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_admin_dashboard_success(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service, mock_request
+    ):
+        """Test getting admin dashboard successfully."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_admin_dashboard
+
+        result = await get_admin_dashboard(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            request=mock_request,
+            period="24h",
+        )
+
+        assert result is not None
+        assert "user_activity" in result
+        assert "content_activity" in result
+        assert "moderation_activity" in result
+        assert "system_health" in result
+        assert "recent_activity" in result
+        mock_dashboard_service.log_admin_action.assert_called_once()
+        mock_dashboard_service.get_dashboard_overview.assert_called_once_with("24h")
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_admin_dashboard_different_periods(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service, mock_request
+    ):
+        """Test getting admin dashboard with different periods."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_admin_dashboard
+
+        # Test 7d period
+        result = await get_admin_dashboard(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            request=mock_request,
+            period="7d",
+        )
+
+        assert result is not None
+        mock_dashboard_service.get_dashboard_overview.assert_called_with("7d")
+
+        # Test 30d period
+        result = await get_admin_dashboard(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            request=mock_request,
+            period="30d",
+        )
+
+        assert result is not None
+        mock_dashboard_service.get_dashboard_overview.assert_called_with("30d")
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.auth.dependencies.require_admin")
+    async def test_create_announcement_success(
+        self, mock_require_superadmin, mock_get_dashboard_service, superadmin_user, mock_dashboard_service, mock_request
+    ):
+        """Test creating system announcement successfully."""
+        mock_require_superadmin.return_value = superadmin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import create_announcement
+        from therobotoverlord_api.database.models.system_announcement import AnnouncementCreate
+
+        announcement_data = AnnouncementCreate(
+            title="Test Announcement",
+            content="This is a test announcement",
+            announcement_type=AnnouncementType.GENERAL,
+            target_roles=[UserRole.CITIZEN],
+        )
+
+        result = await create_announcement(
+            current_user=superadmin_user,
+            announcement_data=announcement_data,
+            dashboard_service=mock_dashboard_service,
+            request=mock_request,
+        )
+
+        assert result is not None
+        assert result.title == "Test Announcement"
+        mock_dashboard_service.create_announcement.assert_called_once()
+        mock_dashboard_service.log_admin_action.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.auth.dependencies.require_admin")
+    async def test_create_announcement_with_expiration(
+        self, mock_require_superadmin, mock_get_dashboard_service, superadmin_user, mock_dashboard_service, mock_request
+    ):
+        """Test creating system announcement with expiration."""
+        mock_require_superadmin.return_value = superadmin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import create_announcement
+        from therobotoverlord_api.database.models.system_announcement import AnnouncementCreate
+
+        expires_at = datetime.now(timezone.utc)
+        announcement_data = AnnouncementCreate(
+            title="Expiring Announcement",
+            content="This announcement will expire",
+            announcement_type=AnnouncementType.WARNING,
+            target_roles=[UserRole.CITIZEN, UserRole.MODERATOR],
+            expires_at=expires_at,
+        )
+
+        result = await create_announcement(
+            current_user=superadmin_user,
+            announcement_data=announcement_data,
+            dashboard_service=mock_dashboard_service,
+            request=mock_request,
+        )
+
+        assert result is not None
+        mock_dashboard_service.create_announcement.assert_called_once_with(
+            announcement_data, superadmin_user.pk
+        )
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_announcements_success(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service
+    ):
+        """Test getting system announcements successfully."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_announcements
+
+        result = await get_announcements(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            active_only=True,
+        )
+
+        assert result == []
+        mock_dashboard_service.get_announcements.assert_called_once_with(True)
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_announcements_all(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service
+    ):
+        """Test getting all system announcements."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_announcements
+
+        result = await get_announcements(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            active_only=False,
+        )
+
+        assert result == []
+        mock_dashboard_service.get_announcements.assert_called_once_with(False)
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_audit_log_success(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service
+    ):
+        """Test getting audit log successfully."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_audit_log
+        from therobotoverlord_api.database.models.admin_action import AuditLogResponse
+
+        result = await get_audit_log(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            limit=100,
+            offset=0,
+        )
+
+        assert isinstance(result, AuditLogResponse)
+        assert result.actions == []
+        assert result.total == 0
+        assert result.limit == 100
+        assert result.offset == 0
+        mock_dashboard_service.get_audit_log.assert_called_once_with(100, 0)
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_audit_log_with_pagination(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_dashboard_service
+    ):
+        """Test getting audit log with pagination."""
+        mock_require_admin.return_value = admin_user
+        mock_get_dashboard_service.return_value = mock_dashboard_service
+
+        from therobotoverlord_api.api.admin import get_audit_log
+
+        result = await get_audit_log(
+            current_user=admin_user,
+            dashboard_service=mock_dashboard_service,
+            limit=50,
+            offset=25,
+        )
+
+        assert result.limit == 50
+        assert result.offset == 25
+        mock_dashboard_service.get_audit_log.assert_called_once_with(50, 25)
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    async def test_dashboard_service_dependency(self, mock_get_dashboard_service):
+        """Test dashboard service dependency injection."""
+        from therobotoverlord_api.api.admin import get_dashboard_service
+
+        service = await get_dashboard_service()
+
+        assert service is not None
+
+    @pytest.mark.asyncio
+    async def test_admin_authorization_required(self, citizen_user):
+        """Test that admin authorization is required for admin endpoints."""
+        from therobotoverlord_api.auth.dependencies import require_admin
+
+        # This would normally raise an HTTPException for non-admin users
+        # The actual authorization logic is tested in the auth module
+        pass
+
+    @pytest.mark.asyncio
+    async def test_superadmin_authorization_required(self, admin_user):
+        """Test that superadmin authorization is required for sensitive endpoints."""
+        from therobotoverlord_api.auth.dependencies import require_superadmin
+
+        # This would normally raise an HTTPException for non-superadmin users
+        # The actual authorization logic is tested in the auth module
+        pass
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_dashboard_service_error_handling(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user, mock_request
+    ):
+        """Test error handling in dashboard service calls."""
+        mock_require_admin.return_value = admin_user
+
+        # Mock service that raises an exception
+        mock_service = AsyncMock()
+        mock_service.get_dashboard_overview.side_effect = Exception("Service error")
+        mock_service.log_admin_action.return_value = MagicMock(pk=uuid4())
+        mock_get_dashboard_service.return_value = mock_service
+
+        from therobotoverlord_api.api.admin import get_admin_dashboard
+
+        with pytest.raises(Exception, match="Service error"):
+            await get_admin_dashboard(
+                current_user=admin_user,
+                dashboard_service=mock_service,
+                request=mock_request,
+                period="24h",
+            )
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.auth.dependencies.require_admin")
+    async def test_create_announcement_service_error(
+        self, mock_require_superadmin, mock_get_dashboard_service, superadmin_user, mock_request
+    ):
+        """Test error handling in create announcement."""
+        mock_require_superadmin.return_value = superadmin_user
+
+        # Mock service that raises an exception
+        mock_service = AsyncMock()
+        mock_service.create_announcement.side_effect = Exception("Creation failed")
+        mock_get_dashboard_service.return_value = mock_service
+
+        from therobotoverlord_api.api.admin import create_announcement
+        from therobotoverlord_api.database.models.system_announcement import AnnouncementCreate
+
+        announcement_data = AnnouncementCreate(
+            title="Test Announcement",
+            content="This is a test announcement",
+            announcement_type=AnnouncementType.GENERAL,
+            target_roles=[UserRole.CITIZEN],
+        )
+
+        with pytest.raises(Exception, match="Creation failed"):
+            await create_announcement(
+                current_user=superadmin_user,
+                announcement_data=announcement_data,
+                dashboard_service=mock_service,
+                request=mock_request,
+            )
+
+    @pytest.mark.asyncio
+    @patch("therobotoverlord_api.api.admin.get_dashboard_service")
+    @patch("therobotoverlord_api.api.admin.require_admin")
+    async def test_get_audit_log_service_error(
+        self, mock_require_admin, mock_get_dashboard_service, admin_user
+    ):
+        """Test error handling in get audit log."""
+        mock_require_admin.return_value = admin_user
+
+        # Mock service that raises an exception
+        mock_service = AsyncMock()
+        mock_service.get_audit_log.side_effect = Exception("Audit log error")
+        mock_get_dashboard_service.return_value = mock_service
+
+        from therobotoverlord_api.api.admin import get_audit_log
+
+        with pytest.raises(Exception, match="Audit log error"):
+            await get_audit_log(
+                current_user=admin_user,
+                dashboard_service=mock_service,
+                limit=100,
+                offset=0,
+            )

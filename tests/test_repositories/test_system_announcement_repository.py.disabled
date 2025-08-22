@@ -1,0 +1,194 @@
+"""Tests for SystemAnnouncementRepository."""
+
+from datetime import datetime
+from datetime import timezone
+from unittest.mock import MagicMock
+from uuid import uuid4
+
+import pytest
+
+from asyncpg import Record
+
+from therobotoverlord_api.database.models.base import UserRole
+from therobotoverlord_api.database.models.system_announcement import AnnouncementCreate
+from therobotoverlord_api.database.models.system_announcement import AnnouncementType
+from therobotoverlord_api.database.models.system_announcement import SystemAnnouncement
+from therobotoverlord_api.database.repositories.system_announcement import SystemAnnouncementRepository
+
+
+class TestSystemAnnouncementRepository:
+    """Test class for SystemAnnouncementRepository."""
+
+    @pytest.fixture
+    def repository(self, mock_connection):
+        """Create SystemAnnouncementRepository instance with mocked connection."""
+        return SystemAnnouncementRepository()
+
+    @pytest.fixture
+    def sample_announcement_data(self):
+        """Sample system announcement data for testing."""
+        return {
+            "pk": uuid4(),
+            "title": "Test Announcement",
+            "content": "This is a test announcement",
+            "announcement_type": AnnouncementType.GENERAL,
+            "target_roles": [UserRole.CITIZEN, UserRole.MODERATOR],
+            "is_active": True,
+            "expires_at": datetime.now(timezone.utc),
+            "created_by_pk": uuid4(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": None,
+        }
+
+    @pytest.fixture
+    def sample_announcement_create(self):
+        """Sample AnnouncementCreate for testing."""
+        return AnnouncementCreate(
+            title="Test Announcement",
+            content="This is a test announcement",
+            announcement_type=AnnouncementType.GENERAL,
+            target_roles=[UserRole.CITIZEN, UserRole.MODERATOR],
+            expires_at=datetime.now(timezone.utc),
+        )
+
+    @pytest.fixture
+    def mock_announcement_record(self, sample_announcement_data):
+        """Mock database record for system announcement."""
+        record = MagicMock(spec=Record)
+
+        def getitem(key):
+            return sample_announcement_data[key]
+
+        def get(key, default=None):
+            return sample_announcement_data.get(key, default)
+
+        record.__getitem__ = getitem
+        record.get = get
+        record.keys = lambda: sample_announcement_data.keys()
+        record.values = lambda: sample_announcement_data.values()
+        record.items = lambda: sample_announcement_data.items()
+        record.__iter__ = lambda: iter(sample_announcement_data.keys())
+        record.__len__ = lambda: len(sample_announcement_data)
+
+        return record
+
+    @pytest.mark.asyncio
+    async def test_create_announcement(
+        self, repository, sample_announcement_create, mock_announcement_record
+    ):
+        """Test creating a system announcement."""
+        created_by_pk = uuid4()
+        repository.connection.fetchrow.return_value = mock_announcement_record
+
+        result = await repository.create_announcement(sample_announcement_create, created_by_pk)
+
+        assert isinstance(result, SystemAnnouncement)
+        repository.connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_pk(self, repository, mock_announcement_record):
+        """Test getting system announcement by primary key."""
+        pk = uuid4()
+        repository.connection.fetchrow.return_value = mock_announcement_record
+
+        result = await repository.get_by_pk(pk)
+
+        assert isinstance(result, SystemAnnouncement)
+        repository.connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_pk_not_found(self, repository):
+        """Test getting system announcement by primary key when not found."""
+        pk = uuid4()
+        repository.connection.fetchrow.return_value = None
+
+        result = await repository.get_by_pk(pk)
+
+        assert result is None
+        repository.connection.fetchrow.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_active_announcements(self, repository, mock_announcement_record):
+        """Test getting active system announcements."""
+        repository.connection.fetch.return_value = [mock_announcement_record]
+
+        result = await repository.get_active_announcements(limit=10, offset=0)
+
+        assert len(result) == 1
+        assert isinstance(result[0], SystemAnnouncement)
+        repository.connection.fetch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_active_announcements_empty(self, repository):
+        """Test getting active system announcements when empty."""
+        repository.connection.fetch.return_value = []
+
+        result = await repository.get_active_announcements(limit=10, offset=0)
+
+        assert result == []
+        repository.connection.fetch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_announcements_for_role(self, repository, mock_announcement_record):
+        """Test getting system announcements for specific role."""
+        role = UserRole.CITIZEN
+        repository.connection.fetch.return_value = [mock_announcement_record]
+
+        result = await repository.get_announcements_for_role(role, limit=10, offset=0)
+
+        assert len(result) == 1
+        assert isinstance(result[0], SystemAnnouncement)
+        repository.connection.fetch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_deactivate_announcement(self, repository):
+        """Test deactivating a system announcement."""
+        pk = uuid4()
+        repository.connection.execute.return_value = "UPDATE 1"
+
+        result = await repository.deactivate_announcement(pk)
+
+        assert result is True
+        repository.connection.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_deactivate_announcement_not_found(self, repository):
+        """Test deactivating a system announcement when not found."""
+        pk = uuid4()
+        repository.connection.execute.return_value = "UPDATE 0"
+
+        result = await repository.deactivate_announcement(pk)
+
+        assert result is False
+        repository.connection.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_expire_old_announcements(self, repository):
+        """Test expiring old system announcements."""
+        repository.connection.execute.return_value = "UPDATE 3"
+
+        result = await repository.expire_old_announcements()
+
+        assert result == 3
+        repository.connection.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_count_active_announcements(self, repository):
+        """Test counting active system announcements."""
+        repository.connection.fetchval.return_value = 5
+
+        result = await repository.count_active_announcements()
+
+        assert result == 5
+        repository.connection.fetchval.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_count_announcements_for_role(self, repository):
+        """Test counting system announcements for specific role."""
+        role = UserRole.CITIZEN
+        repository.connection.fetchval.return_value = 3
+
+        result = await repository.count_announcements_for_role(role)
+
+        assert result == 3
+        repository.connection.fetchval.assert_called_once()
