@@ -84,7 +84,7 @@ class AuthService:
         # Broadcast user online status via WebSocket
         from therobotoverlord_api.websocket.events import get_event_broadcaster
         from therobotoverlord_api.websocket.manager import websocket_manager
-        
+
         event_broadcaster = get_event_broadcaster(websocket_manager)
         await event_broadcaster.broadcast_user_activity_update(
             user_id=user.pk,
@@ -152,14 +152,14 @@ class AuthService:
                 # Broadcast user offline status via WebSocket
                 from therobotoverlord_api.websocket.events import get_event_broadcaster
                 from therobotoverlord_api.websocket.manager import websocket_manager
-                
+
                 event_broadcaster = get_event_broadcaster(websocket_manager)
                 await event_broadcaster.broadcast_user_activity_update(
                     user_id=user.pk,
                     username=user.username,
                     status="offline",
                 )
-        
+
         return await self.session_service.revoke_session(session_id)
 
     async def logout_all_sessions(self, user_id: UUID) -> int:
@@ -170,14 +170,14 @@ class AuthService:
             # Broadcast user offline status via WebSocket
             from therobotoverlord_api.websocket.events import get_event_broadcaster
             from therobotoverlord_api.websocket.manager import websocket_manager
-            
+
             event_broadcaster = get_event_broadcaster(websocket_manager)
             await event_broadcaster.broadcast_user_activity_update(
                 user_id=user.pk,
                 username=user.username,
                 status="offline",
             )
-        
+
         return await self.session_service.revoke_all_user_sessions(user_id)
 
     async def get_user_info(self, user_id: UUID) -> User | None:

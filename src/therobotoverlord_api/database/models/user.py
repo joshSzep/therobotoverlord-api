@@ -21,6 +21,7 @@ class User(BaseDBModel):
     is_banned: bool = False
     is_sanctioned: bool = False
     email_verified: bool = False
+    is_active: bool = True
 
 
 class UserCreate(BaseModel):

@@ -55,7 +55,9 @@ class TestQueueService:
             {"pk": expected_queue_id},  # INSERT query
             {"created_by_pk": uuid4()},  # User lookup for WebSocket broadcasting
         ]
-        mock_db_connection.fetchval.return_value = 5  # Queue size for WebSocket broadcasting
+        mock_db_connection.fetchval.return_value = (
+            5  # Queue size for WebSocket broadcasting
+        )
 
         result = await queue_service.add_topic_to_queue(topic_id, priority)
 
@@ -91,7 +93,9 @@ class TestQueueService:
             {"pk": expected_queue_id},  # INSERT query
             {"created_by_pk": uuid4()},  # User lookup for WebSocket broadcasting
         ]
-        mock_db_connection.fetchval.return_value = 8  # Queue size for WebSocket broadcasting
+        mock_db_connection.fetchval.return_value = (
+            8  # Queue size for WebSocket broadcasting
+        )
 
         result = await queue_service.add_post_to_queue(post_id, topic_id, priority)
 

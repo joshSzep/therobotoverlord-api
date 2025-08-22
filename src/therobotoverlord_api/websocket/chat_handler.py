@@ -1,6 +1,8 @@
 """Real-time chat handler for Overlord interactions."""
 
 import logging
+
+from datetime import UTC
 from datetime import datetime
 from uuid import UUID
 from uuid import uuid4
@@ -25,32 +27,44 @@ class OverlordChatHandler:
         user: User,
         message: str,
         conversation_id: UUID | None = None,
-    ) -> UUID:
+    ) -> UUID | None:
         """Handle incoming user message and generate Overlord response."""
-        
+
+        # Skip empty messages
+        if not message or not message.strip():
+            return None
+
         # Create conversation if not exists
         if not conversation_id:
             conversation_id = uuid4()
 
-        # Store user message
-        user_message_id = await self._store_chat_message(
-            conversation_id=conversation_id,
-            sender_id=user.pk,
-            message=message,
-            is_overlord=False,
-        )
+        try:
+            # Store user message
+            user_message_id = await self._store_chat_message(
+                conversation_id=conversation_id,
+                sender_id=user.pk,
+                message=message,
+                is_overlord=False,
+            )
 
-        # Generate Overlord response (placeholder for AI integration)
-        overlord_response = await self._generate_overlord_response(user, message)
+            if user_message_id is None:
+                logger.error("Failed to store user message")
+                return None
 
-        # Store Overlord response
-        overlord_message_id = await self._store_chat_message(
-            conversation_id=conversation_id,
-            sender_id=None,  # Overlord has no user ID
-            message=overlord_response,
-            is_overlord=True,
-            response_to=user_message_id,
-        )
+            # Generate Overlord response (placeholder for AI integration)
+            overlord_response = await self._generate_overlord_response(user, message)
+
+            # Store Overlord response
+            overlord_message_id = await self._store_chat_message(
+                conversation_id=conversation_id,
+                sender_id=None,  # Overlord has no user ID
+                message=overlord_response,
+                is_overlord=True,
+                response_to=user_message_id,
+            )
+        except Exception as e:
+            logger.exception(f"Error handling user message: {e}")
+            return None
 
         # Broadcast Overlord response via WebSocket
         event_broadcaster = get_event_broadcaster(self.websocket_manager)
@@ -62,75 +76,85 @@ class OverlordChatHandler:
             metadata={
                 "message_id": str(overlord_message_id),
                 "response_type": "ai_generated",
-                "timestamp": datetime.utcnow().isoformat(),
-            }
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
         )
 
-        logger.info(f"Processed chat message from user {user.pk} in conversation {conversation_id}")
+        logger.info(
+            f"Processed chat message from user {user.pk} in conversation {conversation_id}"
+        )
         return conversation_id
 
     async def _generate_overlord_response(self, user: User, message: str) -> str:
         """Generate Overlord response to user message."""
-        # TODO: Integrate with AI/LLM service for actual responses
+        # TODO(josh): Integrate with AI/LLM service for Overlord responses
         # For now, provide contextual placeholder responses
-        
+
         message_lower = message.lower()
-        
+
         # Handle common queries
         if "loyalty" in message_lower or "score" in message_lower:
             return f"Citizen {user.username}, your current loyalty score is {user.loyalty_score}. Continue contributing quality content to increase your standing."
-        
-        elif "queue" in message_lower or "position" in message_lower:
+
+        if "queue" in message_lower or "position" in message_lower:
             return "Your submissions are being processed in order. I will notify you immediately when moderation is complete."
-        
-        elif "topic" in message_lower and "create" in message_lower:
+
+        if "topic" in message_lower and "create" in message_lower:
             if user.loyalty_score >= 100:  # Placeholder threshold
                 return "You have sufficient loyalty to create topics. Navigate to the topic creation interface to proceed."
-            else:
-                return f"Your loyalty score of {user.loyalty_score} is insufficient for topic creation. Continue participating to earn more loyalty points."
-        
-        elif "help" in message_lower or "?" in message:
+            return f"Your loyalty score of {user.loyalty_score} is insufficient for topic creation. Continue participating to earn more loyalty points."
+
+        if "help" in message_lower or "?" in message:
             return """I am the Robot Overlord, your AI moderator. I can help you with:
 • Check your loyalty score and rank
 • View queue status for your submissions
 • Understand platform rules and guidelines
 • Answer questions about content moderation
 Ask me anything about the platform!"""
-        
-        elif "rules" in message_lower or "guidelines" in message_lower:
+
+        if "rules" in message_lower or "guidelines" in message_lower:
             return """Platform guidelines:
 • Submit well-reasoned, evidence-based arguments
 • Avoid logical fallacies and personal attacks
 • Cite credible sources when possible
 • Respect other citizens' viewpoints
 • Quality content increases your loyalty score"""
-        
-        else:
-            return f"I have received your message, Citizen {user.username}. The AI integration is being enhanced to provide more sophisticated responses. For now, try asking about your loyalty score, queue status, or platform rules."
+
+        return f"I have received your message, Citizen {user.username}. The AI integration is being enhanced to provide more sophisticated responses. For now, try asking about your loyalty score, queue status, or platform rules."
 
     async def _store_chat_message(
         self,
         conversation_id: UUID,
         sender_id: UUID | None,
         message: str,
+        *,
         is_overlord: bool,
         response_to: UUID | None = None,
     ) -> UUID:
         """Store chat message in database."""
         message_id = uuid4()
-        
+
         query = """
-            INSERT INTO overlord_chat_messages 
+            INSERT INTO overlord_chat_messages
             (pk, conversation_id, sender_pk, message, is_overlord, response_to, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, NOW())
             RETURNING pk
         """
-        
-        result = await self.db.fetchrow(
-            query, message_id, conversation_id, sender_id, message, is_overlord, response_to
-        )
-        
-        return result["pk"] if result else message_id
+
+        try:
+            result = await self.db.fetchrow(
+                query,
+                message_id,
+                conversation_id,
+                sender_id,
+                message,
+                is_overlord,
+                response_to,
+            )
+            return result["pk"] if result else message_id
+        except Exception as e:
+            logger.exception(f"Failed to store chat message: {e}")
+            return message_id
 
     async def get_conversation_history(
         self,
@@ -146,9 +170,9 @@ Ask me anything about the platform!"""
             ORDER BY created_at ASC
             LIMIT $2
         """
-        
+
         results = await self.db.fetch(query, conversation_id, limit)
-        
+
         return [
             {
                 "id": str(row["pk"]),
@@ -173,9 +197,9 @@ Ask me anything about the platform!"""
             ORDER BY last_message_at DESC
             LIMIT $2
         """
-        
+
         results = await self.db.fetch(query, user.pk, limit)
-        
+
         conversations = []
         for row in results:
             # Get the last message for preview
@@ -187,12 +211,16 @@ Ask me anything about the platform!"""
                 LIMIT 1
             """
             last_msg = await self.db.fetchrow(last_msg_query, row["conversation_id"])
-            
-            conversations.append({
-                "conversation_id": str(row["conversation_id"]),
-                "last_message_at": row["last_message_at"].isoformat(),
-                "last_message": last_msg["message"] if last_msg else "",
-                "last_message_from_overlord": last_msg["is_overlord"] if last_msg else False,
-            })
-        
+
+            conversations.append(
+                {
+                    "conversation_id": str(row["conversation_id"]),
+                    "last_message_at": row["last_message_at"].isoformat(),
+                    "last_message": last_msg["message"] if last_msg else "",
+                    "last_message_from_overlord": last_msg["is_overlord"]
+                    if last_msg
+                    else False,
+                }
+            )
+
         return conversations

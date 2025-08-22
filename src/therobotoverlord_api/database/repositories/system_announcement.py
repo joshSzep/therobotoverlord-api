@@ -28,15 +28,15 @@ class SystemAnnouncementRepository(BaseRepository[SystemAnnouncement]):
         data = announcement.model_dump()
         data["created_by_pk"] = created_by_pk
         data["is_active"] = True
-        
+
         # Create the announcement
         new_announcement = await self.create_from_dict(data)
-        
+
         # Broadcast the announcement via WebSocket
         if new_announcement:
             from therobotoverlord_api.websocket.events import get_event_broadcaster
             from therobotoverlord_api.websocket.manager import websocket_manager
-            
+
             event_broadcaster = get_event_broadcaster(websocket_manager)
             await event_broadcaster.broadcast_system_announcement(
                 title=new_announcement.title,
@@ -44,7 +44,7 @@ class SystemAnnouncementRepository(BaseRepository[SystemAnnouncement]):
                 announcement_type=new_announcement.announcement_type.value,
                 expires_at=new_announcement.expires_at,
             )
-        
+
         return new_announcement
 
     async def get_active_announcements(self) -> list[SystemAnnouncement]:

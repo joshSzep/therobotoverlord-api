@@ -1,6 +1,8 @@
 """WebSocket event handlers and broadcasters."""
 
 import logging
+
+from datetime import UTC
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -20,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 class WebSocketEventBroadcaster:
     """Handles broadcasting of real-time events via WebSocket."""
-    
+
     def __init__(self, websocket_manager: WebSocketManager):
         self.websocket_manager = websocket_manager
-    
+
     async def broadcast_queue_position_update(
         self,
         user_id: UUID,
@@ -42,16 +44,16 @@ class WebSocketEventBroadcaster:
                 estimated_wait_time=estimated_wait_time,
                 total_queue_size=total_queue_size or 0,
             )
-            
+
             message = WebSocketMessage(
                 event_type=WebSocketEventType.QUEUE_POSITION_UPDATE,
                 data=update_data.model_dump(),
                 user_id=user_id,
             )
-            
+
             # Send to specific user
             await self.websocket_manager.send_to_user(user_id, message)
-            
+
             # Also broadcast to queue channel for general queue status
             await self.websocket_manager.broadcast_to_channel(
                 f"queue_{queue_type}",
@@ -60,15 +62,19 @@ class WebSocketEventBroadcaster:
                     data={
                         "queue_type": queue_type,
                         "total_size": total_queue_size,
-                        "updated_at": datetime.utcnow().isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
                     },
-                )
+                ),
             )
-            
-            logger.info(f"Broadcasted queue position update for user {user_id}: {old_position} -> {new_position}")
+
+            logger.info(
+                f"Broadcasted queue position update for user {user_id}: {old_position} -> {new_position}"
+            )
         except Exception as e:
-            logger.exception(f"Failed to broadcast queue position update for user {user_id}: {e}")
-    
+            logger.exception(
+                f"Failed to broadcast queue position update for user {user_id}: {e}"
+            )
+
     async def broadcast_content_moderation_result(
         self,
         user_id: UUID,
@@ -89,25 +95,31 @@ class WebSocketEventBroadcaster:
                 tags=tags or [],
                 loyalty_score_change=loyalty_score_change,
             )
-            
+
             event_type = (
-                WebSocketEventType.CONTENT_APPROVED if decision == "approved"
-                else WebSocketEventType.CONTENT_REJECTED if decision == "rejected"
+                WebSocketEventType.CONTENT_APPROVED
+                if decision == "approved"
+                else WebSocketEventType.CONTENT_REJECTED
+                if decision == "rejected"
                 else WebSocketEventType.CONTENT_FLAGGED
             )
-            
+
             message = WebSocketMessage(
                 event_type=event_type,
                 data=moderation_data.model_dump(),
                 user_id=user_id,
             )
-            
+
             await self.websocket_manager.send_to_user(user_id, message)
-            
-            logger.info(f"Broadcasted moderation result for user {user_id}, content {content_id}: {decision}")
+
+            logger.info(
+                f"Broadcasted moderation result for user {user_id}, content {content_id}: {decision}"
+            )
         except Exception as e:
-            logger.exception(f"Failed to broadcast moderation result for user {user_id}, content {content_id}: {e}")
-    
+            logger.exception(
+                f"Failed to broadcast moderation result for user {user_id}, content {content_id}: {e}"
+            )
+
     async def broadcast_overlord_chat_message(
         self,
         user_id: UUID,
@@ -123,17 +135,17 @@ class WebSocketEventBroadcaster:
             conversation_id=conversation_id,
             metadata=metadata or {},
         )
-        
+
         message = WebSocketMessage(
             event_type=WebSocketEventType.OVERLORD_MESSAGE,
             data=chat_data.model_dump(),
             user_id=user_id,
         )
-        
+
         await self.websocket_manager.send_to_user(user_id, message)
-        
+
         logger.info(f"Broadcasted Overlord message to user {user_id}")
-    
+
     async def broadcast_loyalty_score_update(
         self,
         user_id: UUID,
@@ -152,15 +164,15 @@ class WebSocketEventBroadcaster:
             old_rank=old_rank,
             new_rank=new_rank,
         )
-        
+
         message = WebSocketMessage(
             event_type=WebSocketEventType.LOYALTY_SCORE_UPDATE,
             data=loyalty_data.model_dump(),
             user_id=user_id,
         )
-        
+
         await self.websocket_manager.send_to_user(user_id, message)
-        
+
         # If rank changed, send separate rank change event
         if old_rank != new_rank and new_rank:
             rank_message = WebSocketMessage(
@@ -173,9 +185,11 @@ class WebSocketEventBroadcaster:
                 user_id=user_id,
             )
             await self.websocket_manager.send_to_user(user_id, rank_message)
-        
-        logger.info(f"Broadcasted loyalty score update for user {user_id}: {old_score} -> {new_score}")
-    
+
+        logger.info(
+            f"Broadcasted loyalty score update for user {user_id}: {old_score} -> {new_score}"
+        )
+
     async def broadcast_system_announcement(
         self,
         title: str,
@@ -193,22 +207,27 @@ class WebSocketEventBroadcaster:
             priority=priority,
             expires_at=expires_at,
         )
-        
+
         ws_message = WebSocketMessage(
             event_type=WebSocketEventType.ANNOUNCEMENT,
             data=announcement_data.model_dump(),
         )
-        
-        if target_user_ids:
-            # Send to specific users
-            for user_id in target_user_ids:
-                await self.websocket_manager.send_to_user(user_id, ws_message)
-        else:
-            # Broadcast to all users
-            await self.websocket_manager.broadcast_to_channel("announcements", ws_message)
-        
-        logger.info(f"Broadcasted system announcement: {title}")
-    
+
+        try:
+            if target_user_ids:
+                # Send to specific users
+                for user_id in target_user_ids:
+                    await self.websocket_manager.send_to_user(user_id, ws_message)
+            else:
+                # Broadcast to all users
+                await self.websocket_manager.broadcast_to_channel(
+                    "announcements", ws_message
+                )
+
+            logger.info(f"Broadcasted system announcement: {title}")
+        except Exception as e:
+            logger.exception(f"Failed to broadcast system announcement: {e}")
+
     async def broadcast_user_activity_update(
         self,
         user_id: UUID,
@@ -223,22 +242,23 @@ class WebSocketEventBroadcaster:
             status=status,
             last_seen=last_seen,
         )
-        
+
         event_type = (
-            WebSocketEventType.USER_ONLINE if status == "online"
+            WebSocketEventType.USER_ONLINE
+            if status == "online"
             else WebSocketEventType.USER_OFFLINE
         )
-        
+
         message = WebSocketMessage(
             event_type=event_type,
             data=activity_data.model_dump(),
         )
-        
+
         # Broadcast to all users (for activity indicators)
         await self.websocket_manager.broadcast_to_channel("user_activity", message)
-        
+
         logger.info(f"Broadcasted activity update for user {user_id}: {status}")
-    
+
     async def broadcast_badge_earned(
         self,
         user_id: UUID,
@@ -255,17 +275,18 @@ class WebSocketEventBroadcaster:
                 "badge_name": badge_name,
                 "badge_description": badge_description,
                 "badge_icon": badge_icon,
-                "earned_at": datetime.utcnow().isoformat(),
+                "earned_at": datetime.now(UTC).isoformat(),
             },
             user_id=user_id,
         )
-        
+
         await self.websocket_manager.send_to_user(user_id, message)
-        
+
         logger.info(f"Broadcasted badge earned for user {user_id}: {badge_name}")
-    
+
     async def broadcast_maintenance_mode(
         self,
+        *,
         enabled: bool,
         message: str | None = None,
         estimated_duration: int | None = None,
@@ -277,22 +298,28 @@ class WebSocketEventBroadcaster:
                 "enabled": enabled,
                 "message": message,
                 "estimated_duration": estimated_duration,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
-        
+
         await self.websocket_manager.broadcast_to_all(ws_message)
-        
-        logger.info(f"Broadcasted maintenance mode: {'enabled' if enabled else 'disabled'}")
+
+        logger.info(
+            f"Broadcasted maintenance mode: {'enabled' if enabled else 'disabled'}"
+        )
 
 
-# Global event broadcaster instance
-event_broadcaster: WebSocketEventBroadcaster | None = None
+# Event broadcaster instance cache
+_event_broadcaster_cache: dict[int, WebSocketEventBroadcaster] = {}
 
 
-def get_event_broadcaster(websocket_manager: WebSocketManager) -> WebSocketEventBroadcaster:
+def get_event_broadcaster(
+    websocket_manager: WebSocketManager,
+) -> WebSocketEventBroadcaster:
     """Get or create event broadcaster instance."""
-    global event_broadcaster
-    if event_broadcaster is None:
-        event_broadcaster = WebSocketEventBroadcaster(websocket_manager)
-    return event_broadcaster
+    manager_id = id(websocket_manager)
+    if manager_id not in _event_broadcaster_cache:
+        _event_broadcaster_cache[manager_id] = WebSocketEventBroadcaster(
+            websocket_manager
+        )
+    return _event_broadcaster_cache[manager_id]
