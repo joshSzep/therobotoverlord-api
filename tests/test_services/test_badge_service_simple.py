@@ -123,7 +123,13 @@ class TestBadgeServiceSimple:
         badge_service.user_badge_repo.has_badge.return_value = False
 
         # Mock badge exists and is active
-        mock_badge = type("Badge", (), {"pk": badge_id, "is_active": True})()
+        mock_badge = type("Badge", (), {
+            "pk": badge_id, 
+            "is_active": True,
+            "name": "Test Badge",
+            "description": "Test Description",
+            "image_url": "https://example.com/badge.png"
+        })()
         badge_service.badge_repo.get_by_pk.return_value = mock_badge
 
         # Mock award creation

@@ -43,6 +43,16 @@ class TestAuthServiceTargeted:
     async def test_logout_success(self, auth_service):
         """Test successful logout."""
         session_id = "session_123"
+        
+        # Mock the session and user for WebSocket broadcasting
+        mock_session = MagicMock()
+        mock_session.user_id = uuid4()
+        mock_user = MagicMock()
+        mock_user.pk = mock_session.user_id
+        mock_user.username = "testuser"
+        
+        auth_service.session_service.get_session = AsyncMock(return_value=mock_session)
+        auth_service.user_repository.get_by_pk.return_value = mock_user
 
         result = await auth_service.logout(session_id)
 
@@ -53,6 +63,13 @@ class TestAuthServiceTargeted:
     async def test_logout_all_sessions(self, auth_service):
         """Test logging out all sessions."""
         user_id = uuid4()
+        
+        # Mock the user for WebSocket broadcasting
+        mock_user = MagicMock()
+        mock_user.pk = user_id
+        mock_user.username = "testuser"
+        
+        auth_service.user_repository.get_by_pk.return_value = mock_user
 
         result = await auth_service.logout_all_sessions(user_id)
 

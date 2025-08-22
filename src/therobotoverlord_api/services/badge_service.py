@@ -110,7 +110,23 @@ class BadgeService:
             awarded_by_event=f"manual_award_by_{awarded_by_user_id}",
         )
 
-        return await self.user_badge_repo.award_badge(user_badge_data.model_dump())
+        user_badge = await self.user_badge_repo.award_badge(user_badge_data.model_dump())
+        
+        # Broadcast badge earned notification via WebSocket
+        if user_badge:
+            from therobotoverlord_api.websocket.events import get_event_broadcaster
+            from therobotoverlord_api.websocket.manager import websocket_manager
+            
+            event_broadcaster = get_event_broadcaster(websocket_manager)
+            await event_broadcaster.broadcast_badge_earned(
+                user_id=user_id,
+                badge_id=badge_id,
+                badge_name=badge.name,
+                badge_description=badge.description,
+                badge_icon=badge.image_url,
+            )
+        
+        return user_badge
 
     async def revoke_badge(self, user_id: UUID, badge_id: UUID) -> bool:
         """Revoke a badge from a user."""

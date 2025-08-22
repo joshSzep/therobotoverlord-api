@@ -1,13 +1,14 @@
 """Queue management service for The Robot Overlord."""
 
 import logging
-
 from datetime import UTC
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from therobotoverlord_api.database.connection import db
+from therobotoverlord_api.websocket.events import get_event_broadcaster
+from therobotoverlord_api.websocket.manager import websocket_manager
 from therobotoverlord_api.workers.redis_connection import get_redis_pool
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,25 @@ class QueueService:
                     raise RuntimeError("Redis pool not available")
 
                 logger.info(f"Added topic {topic_id} to queue at position {position}")
+
+                # Broadcast queue position update via WebSocket
+                try:
+                    # Get user ID for this topic
+                    user_query = "SELECT created_by_pk FROM topics WHERE pk = $1"
+                    user_result = await self.db.fetchrow(user_query, topic_id)
+                    if user_result:
+                        user_id = user_result["created_by_pk"]
+                        event_broadcaster = get_event_broadcaster(websocket_manager)
+                        await event_broadcaster.broadcast_queue_position_update(
+                            user_id=user_id,
+                            queue_type="topic_creation",
+                            old_position=None,
+                            new_position=position,
+                            total_queue_size=await self._get_queue_size("topic_creation_queue")
+                        )
+                except Exception as ws_error:
+                    logger.warning(f"Failed to broadcast queue update: {ws_error}")
+                
                 return queue_id
 
             return None
@@ -120,6 +140,25 @@ class QueueService:
                     raise RuntimeError("Redis pool not available")
 
                 logger.info(f"Added post {post_id} to queue at position {position}")
+
+                # Broadcast queue position update via WebSocket
+                try:
+                    # Get user ID for this post
+                    user_query = "SELECT created_by_pk FROM posts WHERE pk = $1"
+                    user_result = await self.db.fetchrow(user_query, post_id)
+                    if user_result:
+                        user_id = user_result["created_by_pk"]
+                        event_broadcaster = get_event_broadcaster(websocket_manager)
+                        await event_broadcaster.broadcast_queue_position_update(
+                            user_id=user_id,
+                            queue_type="post_moderation",
+                            old_position=None,
+                            new_position=position,
+                            total_queue_size=await self._get_queue_size("post_moderation_queue")
+                        )
+                except Exception as ws_error:
+                    logger.warning(f"Failed to broadcast queue update: {ws_error}")
+                
                 return queue_id
 
             return None
@@ -359,6 +398,16 @@ class QueueService:
 
         except Exception as e:
             logger.exception(f"Error estimating wait time for {queue_type}: {e}")
+            return 0
+
+    async def _get_queue_size(self, table_name: str) -> int:
+        """Get the current size of a queue table."""
+        try:
+            query = f"SELECT COUNT(*) FROM {table_name} WHERE status = 'pending'"  # nosec B608
+            result = await self.db.fetchval(query)
+            return result or 0
+        except Exception as e:
+            logger.exception(f"Error getting queue size for {table_name}: {e}")
             return 0
 
     async def add_appeal_to_queue(self, appeal_pk: UUID) -> None:
