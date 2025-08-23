@@ -24,6 +24,15 @@ class ModerationResult(BaseModel):
     suggestions: list[str] = []
 
 
+class ToSScreeningResult(BaseModel):
+    """Structured output for Terms of Service screening."""
+
+    approved: bool  # True = send to moderation queue, False = immediate rejection
+    violation_type: str | None  # Type of violation if rejected
+    reasoning: str
+    confidence: float  # 0.0 to 1.0
+
+
 class ChatResponse(BaseModel):
     """Structured output for chat responses."""
 
@@ -49,6 +58,13 @@ class LLMClient:
             model=self.model,
             deps_type=dict[str, Any],
             output_type=ModerationResult,
+        )
+
+        # Create ToS screening agent
+        self.tos_agent = Agent(
+            model=self.model,
+            deps_type=dict[str, Any],
+            output_type=ToSScreeningResult,
         )
 
         # Create chat response agent
@@ -205,3 +221,59 @@ Respond as The Robot Overlord would - with authority, intelligence, and belief i
         )
 
         return result.data.message
+
+    async def screen_content_for_tos(
+        self,
+        content: str,
+        content_type: str = "post",
+        user_name: str | None = None,
+        language: str = "en",
+    ) -> ToSScreeningResult:
+        """
+        Screen content for Terms of Service violations before moderation.
+
+        Args:
+            content: The content to screen
+            content_type: Type of content (post, topic, message)
+            user_name: Name of the user who created the content
+            language: Language of the content
+
+        Returns:
+            ToSScreeningResult with approval decision and reasoning
+        """
+        from therobotoverlord_api.services.prompt_service import PromptService
+
+        prompt_service = PromptService()
+
+        # Get ToS screening prompt
+        tos_prompt = prompt_service._load_component(
+            "system_instructions", "tos_screening"
+        )
+
+        # Create context for the screening
+        context = {
+            "content": content,
+            "content_type": content_type,
+            "user_name": user_name or "Anonymous",
+            "language": language,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+        # Add system prompt for ToS agent
+        @self.tos_agent.system_prompt
+        def add_tos_context(ctx: RunContext[dict[str, Any]]) -> str:
+            return tos_prompt
+
+        # Run ToS screening
+        result = await self.tos_agent.run(
+            user_prompt=f"""Screen this {content_type} content for Terms of Service violations:
+
+Content: {content}
+User: {user_name or "Anonymous"}
+Language: {language}
+
+Provide your screening decision in the required JSON format.""",
+            deps=context,
+        )
+
+        return result.data

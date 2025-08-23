@@ -270,7 +270,7 @@ class TestCreatePost:
     @patch("therobotoverlord_api.api.posts.get_queue_service")
     @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
-    @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
+    @patch("therobotoverlord_api.api.posts.get_tos_screening_service")
     def test_create_post_success(
         self,
         mock_tos_check,
@@ -282,8 +282,17 @@ class TestCreatePost:
         sample_post,
     ):
         """Test successful post creation."""
-        # Mock ToS check to pass
-        mock_tos_check.return_value = False
+        # Mock ToS screening service
+        from therobotoverlord_api.services.llm_client import ToSScreeningResult
+
+        mock_tos_service = AsyncMock()
+        mock_tos_service.screen_content.return_value = ToSScreeningResult(
+            approved=True,
+            violation_type=None,
+            reasoning="Content is acceptable",
+            confidence=0.9,
+        )
+        mock_tos_check.return_value = mock_tos_service
 
         mock_repo = AsyncMock()
         # Create submitted post for initial creation

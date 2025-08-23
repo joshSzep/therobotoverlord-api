@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from therobotoverlord_api.api.posts import _check_tos_violation_placeholder
 from therobotoverlord_api.api.posts import router as posts_router
 from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.database.models.base import ContentStatus
@@ -56,10 +55,10 @@ class TestTosScreeningFlow:
     @patch("therobotoverlord_api.api.posts.get_queue_service")
     @patch("therobotoverlord_api.api.posts.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.posts.PostRepository")
-    @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
+    @patch("therobotoverlord_api.api.posts.get_tos_screening_service")
     def test_post_creation_with_tos_pass(
         self,
-        mock_tos_check,
+        mock_tos_service,
         mock_repo_class,
         mock_loyalty_service,
         mock_queue_service,
@@ -67,8 +66,14 @@ class TestTosScreeningFlow:
         mock_user,
     ):
         """Test post creation when ToS screening passes."""
-        # Mock ToS check to pass
-        mock_tos_check.return_value = False
+        # Mock ToS screening service to pass
+        mock_tos_service_instance = AsyncMock()
+        mock_tos_result = AsyncMock()
+        mock_tos_result.approved = True
+        mock_tos_result.violation_type = None
+        mock_tos_result.reasoning = "Content approved"
+        mock_tos_service_instance.screen_content.return_value = mock_tos_result
+        mock_tos_service.return_value = mock_tos_service_instance
 
         # Mock repository
         mock_repo = AsyncMock()
@@ -140,8 +145,13 @@ class TestTosScreeningFlow:
         # Clean up
         client.app.dependency_overrides.clear()
 
-        # Verify ToS check was called
-        mock_tos_check.assert_called_once_with("Clean content")
+        # Verify ToS screening was called
+        mock_tos_service_instance.screen_content.assert_called_once_with(
+            content="Clean content",
+            content_type="post",
+            user_name=mock_user.username,
+            language="en",
+        )
 
         # Verify post was created with SUBMITTED status initially
         mock_repo.create_from_dict.assert_called_once()
@@ -152,13 +162,19 @@ class TestTosScreeningFlow:
         mock_repo.update.assert_called_once()
 
     @patch("therobotoverlord_api.api.posts.PostRepository")
-    @patch("therobotoverlord_api.api.posts._check_tos_violation_placeholder")
+    @patch("therobotoverlord_api.api.posts.get_tos_screening_service")
     def test_post_creation_with_tos_violation(
-        self, mock_tos_check, mock_repo_class, client, mock_user
+        self, mock_tos_service, mock_repo_class, client, mock_user
     ):
         """Test post creation when ToS screening fails."""
-        # Mock ToS check to fail
-        mock_tos_check.return_value = True
+        # Mock ToS screening service to fail
+        mock_tos_service_instance = AsyncMock()
+        mock_tos_result = AsyncMock()
+        mock_tos_result.approved = False
+        mock_tos_result.violation_type = "spam"
+        mock_tos_result.reasoning = "Content appears to be spam"
+        mock_tos_service_instance.screen_content.return_value = mock_tos_result
+        mock_tos_service.return_value = mock_tos_service_instance
 
         # Mock repository
         mock_repo = AsyncMock()
@@ -189,7 +205,7 @@ class TestTosScreeningFlow:
             submitted_at=submitted_post.submitted_at,
             approved_at=None,
             overlord_feedback=None,
-            rejection_reason="Terms of Service violation detected",
+            rejection_reason="Terms of Service violation: spam - Content appears to be spam",
             parent_post_pk=None,
         )
 
@@ -221,14 +237,19 @@ class TestTosScreeningFlow:
         # Clean up
         client.app.dependency_overrides.clear()
 
-        # Verify ToS check was called
-        mock_tos_check.assert_called_once_with("Violating content")
+        # Verify ToS screening was called
+        mock_tos_service_instance.screen_content.assert_called_once_with(
+            content="Violating content",
+            content_type="post",
+            user_name=mock_user.username,
+            language="en",
+        )
 
         # Verify post was updated to TOS_VIOLATION status
         mock_repo.update.assert_called_once()
         update_args = mock_repo.update.call_args[0][1]
         assert update_args.status == ContentStatus.TOS_VIOLATION
-        assert update_args.rejection_reason == "Terms of Service violation detected"
+        assert "Terms of Service violation: spam" in update_args.rejection_reason
 
     @patch("therobotoverlord_api.api.posts.PostRepository")
     def test_get_submitted_posts_endpoint(self, mock_repo_class, client):
@@ -265,12 +286,33 @@ class TestTosScreeningFlow:
 
         mock_repo.get_submitted_posts.assert_called_once_with(50, 0)
 
-    def test_tos_violation_placeholder_function(self):
-        """Test the placeholder ToS violation checker."""
-        # Test that placeholder always returns False (passes)
-        assert _check_tos_violation_placeholder("This is test content") is False
-        assert _check_tos_violation_placeholder("Some other content") is False
-        assert _check_tos_violation_placeholder("") is False
+    @patch("therobotoverlord_api.services.tos_screening_service.ToSScreeningService")
+    @pytest.mark.asyncio
+    async def test_tos_screening_service_integration(self, mock_tos_service_class):
+        """Test the ToS screening service integration."""
+        from therobotoverlord_api.services.llm_client import ToSScreeningResult
+        from therobotoverlord_api.services.tos_screening_service import (
+            get_tos_screening_service,
+        )
+
+        # Mock service instance
+        mock_service = AsyncMock()
+        mock_service.screen_content.return_value = ToSScreeningResult(
+            approved=True,
+            violation_type=None,
+            reasoning="Content is acceptable",
+            confidence=0.9,
+        )
+        mock_tos_service_class.return_value = mock_service
+
+        # Test service call
+        service = await get_tos_screening_service()
+        result = await service.screen_content("Test content", "post")
+
+        assert result.approved is True
+        assert result.violation_type is None
+        assert result.reasoning == "Content is acceptable"
+        assert result.confidence == 0.9
 
 
 class TestContentStatusEnum:

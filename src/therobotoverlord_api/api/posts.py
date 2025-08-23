@@ -33,6 +33,9 @@ from therobotoverlord_api.services.loyalty_score_service import (
     get_loyalty_score_service,
 )
 from therobotoverlord_api.services.queue_service import get_queue_service
+from therobotoverlord_api.services.tos_screening_service import (
+    get_tos_screening_service,
+)
 from therobotoverlord_api.services.translation_service import get_translation_service
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -221,13 +224,19 @@ async def create_post(
             content=post_data.content,
         )
 
-    # Basic ToS screening (placeholder)
-    tos_violation = _check_tos_violation_placeholder(post_data.content)
-    if tos_violation:
+    # ToS screening using AI
+    tos_service = await get_tos_screening_service()
+    tos_result = await tos_service.screen_content(
+        content=post_data.content,
+        content_type="post",
+        user_name=current_user.username,
+        language="en",  # TODO(josh): Add language detection
+    )
+    if not tos_result.approved:
         # Reject post immediately for ToS violation
         update_data = PostUpdate(
             status=ContentStatus.TOS_VIOLATION,
-            rejection_reason="Terms of Service violation detected",
+            rejection_reason=f"Terms of Service violation: {tos_result.violation_type} - {tos_result.reasoning}",
         )
         updated_post = await post_repo.update(post.pk, update_data)
         if updated_post:
@@ -235,7 +244,8 @@ async def create_post(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error": "TOS_VIOLATION",
-                    "message": "Content violates Terms of Service",
+                    "message": f"Content violates Terms of Service: {tos_result.violation_type}",
+                    "reasoning": tos_result.reasoning,
                     "post_id": str(post.pk),
                 },
             )
@@ -269,12 +279,6 @@ async def create_post(
             pass
 
     return post
-
-
-def _check_tos_violation_placeholder(content: str) -> bool:
-    """Placeholder ToS violation checker - always passes for now."""
-    # NOTE: Future enhancement - Replace with actual LLM-based ToS screening
-    return False
 
 
 @router.patch("/{post_id}")
