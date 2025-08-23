@@ -9,6 +9,7 @@ import asyncpg
 from therobotoverlord_api.database.repositories.private_message import (
     PrivateMessageRepository,
 )
+from therobotoverlord_api.services.ai_moderation_service import AIModerationService
 from therobotoverlord_api.workers.base import BaseWorker
 from therobotoverlord_api.workers.base import QueueWorkerMixin
 from therobotoverlord_api.workers.base import create_worker_class
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 class PrivateMessageModerationWorker(BaseWorker, QueueWorkerMixin):
     """Worker for processing private message moderation queue."""
+
+    def __init__(self):
+        super().__init__()
+        self.ai_moderation = AIModerationService()
 
     async def process_message_moderation(
         self, ctx: dict, queue_id: UUID, message_id: UUID
@@ -43,8 +48,8 @@ class PrivateMessageModerationWorker(BaseWorker, QueueWorkerMixin):
                 logger.error(f"Private message {message_id} not found")
                 return False
 
-            # For now, use placeholder moderation (will be replaced with AI)
-            moderation_result = await self._placeholder_message_moderation(message)
+            # Use AI moderation service
+            moderation_result = await self._ai_message_moderation(message)
 
             if moderation_result["approved"]:
                 # Approve the message
@@ -74,87 +79,43 @@ class PrivateMessageModerationWorker(BaseWorker, QueueWorkerMixin):
             logger.exception(f"Error moderating private message {message_id}")
             return False
 
-    async def _placeholder_message_moderation(self, message) -> dict:
-        """Placeholder private message moderation logic."""
-        content = message.content.strip()
+    async def _ai_message_moderation(self, message) -> dict:
+        """AI-powered private message moderation using The Robot Overlord's standards."""
+        try:
+            # Get sender name if available
+            sender_name = getattr(message, "sender_name", None) or getattr(
+                message, "author", None
+            )
+            recipient_name = getattr(message, "recipient_name", None)
 
-        # Private messages have more lenient rules than public posts
-        # Focus on serious violations: harassment, threats, doxxing
-        serious_violations = [
-            "kill yourself",
-            "kys",
-            "doxx",
-            "dox",
-            "home address",
-            "phone number",
-            "real name",
-            "workplace",
-            "threat",
-            "violence",
-        ]
+            # Evaluate message using AI moderation service
+            result = await self.ai_moderation.evaluate_private_message(
+                content=message.content,
+                sender_name=sender_name,
+                recipient_name=recipient_name,
+                language="en",  # TODO(josh): Add language detection
+            )
 
-        harassment_patterns = [
-            "stupid",
-            "idiot",
-            "moron",
-            "retard",
-            "loser",
-            "pathetic",
-            "worthless",
-            "waste of space",
-            "kill",
-            "die",
-            "hurt",
-        ]
+            # Convert AI result to worker format
+            approved = result.decision in ["No Violation", "Praise"]
 
-        required_min_length = 1  # Very permissive for private messages
-
-        # Check minimum length
-        if len(content) < required_min_length:
             return {
-                "approved": False,
-                "feedback": "Empty messages are not permitted.",
+                "approved": approved,
+                "feedback": result.feedback,
+                "reasoning": result.reasoning,
+                "confidence": result.confidence,
+                "violations": result.violations,
             }
 
-        # Check for serious violations
-        content_lower = content.lower()
-        for violation in serious_violations:
-            if violation in content_lower:
-                return {
-                    "approved": False,
-                    "feedback": "Private message contains serious policy violation. This behavior is unacceptable even in private discourse.",
-                }
-
-        # Check for harassment patterns (more lenient - need multiple indicators)
-        harassment_count = sum(
-            1 for pattern in harassment_patterns if pattern in content_lower
-        )
-        if harassment_count >= 3:  # Multiple harassment indicators
+        except Exception:
+            logger.exception(f"Error in AI message moderation for message {message.pk}")
+            # Fallback to conservative approval with generic feedback
             return {
-                "approved": False,
-                "feedback": "Private discourse allows disagreement, but this crosses into harassment territory. Tone it down, citizen.",
+                "approved": True,
+                "feedback": "Message approved pending manual review due to system error.",
+                "reasoning": "AI moderation service unavailable",
+                "confidence": 0.0,
             }
-
-        # Check for excessive caps (less strict than public posts)
-        if content.isupper() and len(content) > 50:
-            return {
-                "approved": False,
-                "feedback": "Even in private, excessive shouting is unnecessary. Use your indoor voice.",
-            }
-
-        # Generate contextual feedback for approved messages
-        feedback_options = [
-            None,  # Most private messages get no feedback
-            None,
-            None,
-            "Private discourse noted.",
-            "Acceptable private communication.",
-        ]
-
-        # Simple hash-based selection for consistent feedback
-        feedback_index = hash(content) % len(feedback_options)
-
-        return {"approved": True, "feedback": feedback_options[feedback_index]}
 
 
 # Define worker functions

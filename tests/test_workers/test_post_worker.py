@@ -127,15 +127,24 @@ class TestPostModerationWorker:
             mock_repo.reject_post.return_value = True
             mock_repo_class.return_value = mock_repo
 
-            ctx = {"db": mock_connection}
-            queue_id = uuid4()
-            post_id = sample_post_data["pk"]
+            # Mock AI moderation service to return rejection
+            with patch.object(worker, "_ai_post_moderation") as mock_ai_mod:
+                mock_ai_mod.return_value = {
+                    "approved": False,
+                    "feedback": "Content contains spam",
+                    "reasoning": "Multiple spam keywords detected",
+                    "confidence": 0.95,
+                }
 
-            result = await worker.process_post_moderation(ctx, queue_id, post_id)
+                ctx = {"db": mock_connection}
+                queue_id = uuid4()
+                post_id = sample_post_data["pk"]
 
-            assert result is True
-            mock_repo.get_by_pk.assert_called_once_with(post_id)
-            mock_repo.reject_post.assert_called_once()
+                result = await worker.process_post_moderation(ctx, queue_id, post_id)
+
+                assert result is True
+                mock_repo.get_by_pk.assert_called_once_with(post_id)
+                mock_repo.reject_post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_database_error(self, mock_connection, sample_post_data):
@@ -158,51 +167,6 @@ class TestPostModerationWorker:
             result = await worker.process_post_moderation(ctx, queue_id, post_id)
 
             assert result is False
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_approval(self):
-        """Test placeholder moderation logic for approval."""
-        worker = PostModerationWorker()
-
-        mock_post = MagicMock()
-        mock_post.content = "This is a good post with sufficient length"
-
-        result = await worker._placeholder_post_moderation(mock_post)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is True
-        assert "feedback" in result
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_rejection(self):
-        """Test placeholder moderation logic for rejection."""
-        worker = PostModerationWorker()
-
-        mock_post = MagicMock()
-        mock_post.content = "spam"  # Contains banned word
-
-        result = await worker._placeholder_post_moderation(mock_post)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_too_short(self):
-        """Test placeholder moderation logic for too short content."""
-        worker = PostModerationWorker()
-
-        mock_post = MagicMock()
-        mock_post.content = "short"  # Too short
-
-        result = await worker._placeholder_post_moderation(mock_post)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "Minimum" in result["feedback"]
 
 
 @pytest.mark.asyncio

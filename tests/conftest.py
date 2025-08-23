@@ -1,6 +1,7 @@
 """Test configuration and fixtures for The Robot Overlord API tests."""
 
 import asyncio
+import os
 
 from datetime import UTC
 from datetime import datetime
@@ -21,6 +22,17 @@ from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.models.user import UserCreate
 from therobotoverlord_api.main import app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment variables."""
+    # Set a dummy Anthropic API key for testing
+    os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
+    yield
+    # Clean up after tests
+    if "ANTHROPIC_API_KEY" in os.environ:
+        del os.environ["ANTHROPIC_API_KEY"]
 
 
 @pytest.fixture(scope="session")

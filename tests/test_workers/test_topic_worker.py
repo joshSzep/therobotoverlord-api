@@ -125,19 +125,24 @@ class TestTopicModerationWorker:
             mock_topic = MagicMock()
             mock_topic.title = "spam"  # Should be rejected
             mock_topic.description = "spam content"
+            mock_topic.pk = sample_topic_data["pk"]
             mock_repo.get_by_pk.return_value = mock_topic
             mock_repo.reject_topic.return_value = True
             mock_repo_class.return_value = mock_repo
 
-            ctx = {"db": mock_connection}
-            queue_id = uuid4()
-            topic_id = sample_topic_data["pk"]
+            # Mock AI moderation service to return rejection
+            with patch.object(worker, "_ai_topic_moderation") as mock_ai_mod:
+                mock_ai_mod.return_value = False  # Topic rejected
 
-            result = await worker.process_topic_moderation(ctx, queue_id, topic_id)
+                ctx = {"db": mock_connection}
+                queue_id = uuid4()
+                topic_id = sample_topic_data["pk"]
 
-            assert result is True
-            mock_repo.get_by_pk.assert_called_once_with(topic_id)
-            mock_repo.reject_topic.assert_called_once()
+                result = await worker.process_topic_moderation(ctx, queue_id, topic_id)
+
+                assert result is True
+                mock_repo.get_by_pk.assert_called_once_with(topic_id)
+                mock_repo.reject_topic.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_database_error(self, mock_connection, sample_topic_data):
@@ -160,47 +165,6 @@ class TestTopicModerationWorker:
             result = await worker.process_topic_moderation(ctx, queue_id, topic_id)
 
             assert result is False
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_approval(self):
-        """Test placeholder moderation logic for approval."""
-        worker = TopicModerationWorker()
-
-        mock_topic = MagicMock()
-        mock_topic.title = "Good Topic Title"
-        mock_topic.description = (
-            "This is a good topic description with sufficient content"
-        )
-
-        result = await worker._placeholder_topic_moderation(mock_topic)
-
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_rejection(self):
-        """Test placeholder moderation logic for rejection."""
-        worker = TopicModerationWorker()
-
-        mock_topic = MagicMock()
-        mock_topic.title = "spam"  # Contains banned word
-        mock_topic.description = "spam content"
-
-        result = await worker._placeholder_topic_moderation(mock_topic)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_too_short(self):
-        """Test placeholder moderation logic for too short content."""
-        worker = TopicModerationWorker()
-
-        mock_topic = MagicMock()
-        mock_topic.title = "OK"
-        mock_topic.description = "short"  # Too short
-
-        result = await worker._placeholder_topic_moderation(mock_topic)
-
-        assert result is False
 
 
 @pytest.mark.asyncio

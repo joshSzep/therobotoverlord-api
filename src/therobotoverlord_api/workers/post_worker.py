@@ -7,6 +7,7 @@ from uuid import UUID
 import asyncpg
 
 from therobotoverlord_api.database.repositories.post import PostRepository
+from therobotoverlord_api.services.ai_moderation_service import AIModerationService
 from therobotoverlord_api.workers.base import BaseWorker
 from therobotoverlord_api.workers.base import QueueWorkerMixin
 from therobotoverlord_api.workers.base import create_worker_class
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 class PostModerationWorker(BaseWorker, QueueWorkerMixin):
     """Worker for processing post moderation queue."""
+
+    def __init__(self):
+        super().__init__()
+        self.ai_moderation = AIModerationService()
 
     async def process_post_moderation(
         self, ctx: dict, queue_id: UUID, post_id: UUID
@@ -41,8 +46,8 @@ class PostModerationWorker(BaseWorker, QueueWorkerMixin):
                 logger.error(f"Post {post_id} not found")
                 return False
 
-            # For now, auto-approve all posts (placeholder for AI moderation)
-            moderation_result = await self._placeholder_post_moderation(post)
+            # Use AI moderation service
+            moderation_result = await self._ai_post_moderation(post)
 
             if moderation_result["approved"]:
                 # Approve the post
@@ -69,50 +74,41 @@ class PostModerationWorker(BaseWorker, QueueWorkerMixin):
             logger.exception(f"Error moderating post {post_id}")
             return False
 
-    async def _placeholder_post_moderation(self, post) -> dict:
-        """Placeholder post moderation logic."""
-        content = post.content.strip()
+    async def _ai_post_moderation(self, post) -> dict:
+        """AI-powered post moderation using The Robot Overlord's standards."""
+        try:
+            # Get user name if available
+            user_name = getattr(post, "user_name", None) or getattr(
+                post, "author", None
+            )
 
-        # Simple rules for now:
-        banned_words = ["spam", "hate", "violence", "illegal"]
-        required_min_length = 10
+            # Evaluate post using AI moderation service
+            result = await self.ai_moderation.evaluate_post(
+                content=post.content,
+                user_name=user_name,
+                language="en",  # TODO(josh): Add language detection
+            )
 
-        # Check minimum length
-        if len(content) < required_min_length:
+            # Convert AI result to worker format
+            approved = result.decision in ["No Violation", "Praise"]
+
             return {
-                "approved": False,
-                "feedback": f"Content too short. Minimum {required_min_length} characters required.",
+                "approved": approved,
+                "feedback": result.feedback,
+                "reasoning": result.reasoning,
+                "confidence": result.confidence,
+                "violations": result.violations,
             }
 
-        # Check for banned words
-        content_lower = content.lower()
-        for banned_word in banned_words:
-            if banned_word in content_lower:
-                return {
-                    "approved": False,
-                    "feedback": f"Content contains prohibited language: '{banned_word}'",
-                }
-
-        # Check for all caps (shouting)
-        if content.isupper() and len(content) > 20:
+        except Exception:
+            logger.exception(f"Error in AI post moderation for post {post.pk}")
+            # Fallback to conservative approval with generic feedback
             return {
-                "approved": False,
-                "feedback": "Excessive use of capital letters. Please use normal capitalization.",
+                "approved": True,
+                "feedback": "Post approved pending manual review due to system error.",
+                "reasoning": "AI moderation service unavailable",
+                "confidence": 0.0,
             }
-
-        # Generate positive feedback for approved posts
-        feedback_options = [
-            "Well-reasoned argument, citizen.",
-            "Your contribution advances the discourse.",
-            "Logical and relevant to the topic.",
-            "Acceptable reasoning demonstrated.",
-            "Your argument shows proper structure.",
-        ]
-
-        # Simple hash-based selection for consistent feedback
-        feedback_index = hash(content) % len(feedback_options)
-
-        return {"approved": True, "feedback": feedback_options[feedback_index]}
 
 
 # Define worker functions

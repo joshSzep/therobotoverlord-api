@@ -132,15 +132,26 @@ class TestPrivateMessageModerationWorker:
             mock_repo.reject_message.return_value = True
             mock_repo_class.return_value = mock_repo
 
-            ctx = {"db": mock_connection}
-            queue_id = uuid4()
-            message_id = sample_message_data["pk"]
+            # Mock AI moderation service to return rejection
+            with patch.object(worker, "_ai_message_moderation") as mock_ai_mod:
+                mock_ai_mod.return_value = {
+                    "approved": False,
+                    "feedback": "Content contains harassment",
+                    "reasoning": "Threatening language detected",
+                    "confidence": 0.98,
+                }
 
-            result = await worker.process_message_moderation(ctx, queue_id, message_id)
+                ctx = {"db": mock_connection}
+                queue_id = uuid4()
+                message_id = sample_message_data["pk"]
 
-            assert result is True
-            mock_repo.get_by_pk.assert_called_once_with(message_id)
-            mock_repo.reject_message.assert_called_once()
+                result = await worker.process_message_moderation(
+                    ctx, queue_id, message_id
+                )
+
+                assert result is True
+                mock_repo.get_by_pk.assert_called_once_with(message_id)
+                mock_repo.reject_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_database_error(self, mock_connection, sample_message_data):
@@ -189,117 +200,6 @@ class TestPrivateMessageModerationWorker:
         result = await worker.process_message_moderation(ctx, queue_id, message_id)
 
         assert result is False
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_approval(self):
-        """Test placeholder moderation logic for approval."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = "This is a good private message with sufficient content"
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is True
-        assert "feedback" in result
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_serious_violation(self):
-        """Test placeholder moderation logic for serious violations."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = "kill yourself"  # Serious violation
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-        assert "serious policy violation" in result["feedback"]
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_harassment_patterns(self):
-        """Test placeholder moderation logic for harassment patterns."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = "you are stupid idiot moron loser"  # Multiple harassment
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-        assert "harassment" in result["feedback"]
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_excessive_caps(self):
-        """Test placeholder moderation logic for excessive caps."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = (
-            "THIS IS A VERY LONG MESSAGE WRITTEN IN ALL CAPS WHICH IS EXCESSIVE"
-        )
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-        assert "shouting" in result["feedback"]
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_empty_message(self):
-        """Test placeholder moderation logic for empty message."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = ""  # Empty content
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-        assert "Empty" in result["feedback"]
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_single_harassment_word(self):
-        """Test that single harassment word doesn't trigger rejection."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = "I think that's stupid but I understand your point"
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is True  # Single word shouldn't trigger rejection
-
-    @pytest.mark.asyncio
-    async def test_placeholder_moderation_doxxing_attempt(self):
-        """Test placeholder moderation logic for doxxing attempts."""
-        worker = PrivateMessageModerationWorker()
-
-        mock_message = MagicMock()
-        mock_message.content = "I know your real name and home address"
-
-        result = await worker._placeholder_message_moderation(mock_message)
-
-        assert isinstance(result, dict)
-        assert "approved" in result
-        assert result["approved"] is False
-        assert "feedback" in result
-        assert "serious policy violation" in result["feedback"]
 
 
 @pytest.mark.asyncio

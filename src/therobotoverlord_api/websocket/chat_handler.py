@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from therobotoverlord_api.database.connection import db
 from therobotoverlord_api.database.models.user import User
+from therobotoverlord_api.services.ai_moderation_service import AIModerationService
 from therobotoverlord_api.websocket.events import get_event_broadcaster
 from therobotoverlord_api.websocket.manager import WebSocketManager
 
@@ -21,6 +22,7 @@ class OverlordChatHandler:
     def __init__(self, websocket_manager: WebSocketManager):
         self.websocket_manager = websocket_manager
         self.db = db
+        self.ai_moderation = AIModerationService()
 
     async def handle_user_message(
         self,
@@ -51,7 +53,7 @@ class OverlordChatHandler:
                 logger.error("Failed to store user message")
                 return None
 
-            # Generate Overlord response (placeholder for AI integration)
+            # Generate Overlord response using AI
             overlord_response = await self._generate_overlord_response(user, message)
 
             # Store Overlord response
@@ -86,10 +88,25 @@ class OverlordChatHandler:
         return conversation_id
 
     async def _generate_overlord_response(self, user: User, message: str) -> str:
-        """Generate Overlord response to user message."""
-        # TODO(josh): Integrate with AI/LLM service for Overlord responses
-        # For now, provide contextual placeholder responses
+        """Generate Overlord response to user message using AI."""
+        try:
+            # Get conversation history for context (simplified for now)
+            chat_history = f"Previous conversation context with {user.username}"
 
+            # Generate AI response as The Robot Overlord
+            response = await self.ai_moderation.generate_overlord_chat_response(
+                user_input=message, user_name=user.username, chat_history=chat_history
+            )
+
+            return response
+
+        except Exception:
+            logger.exception(f"Error generating AI response for user {user.username}")
+            # Fallback to contextual responses
+            return self._fallback_overlord_response(user, message)
+
+    def _fallback_overlord_response(self, user: User, message: str) -> str:
+        """Fallback response system when AI is unavailable."""
         message_lower = message.lower()
 
         # Handle common queries
@@ -120,7 +137,7 @@ Ask me anything about the platform!"""
 • Respect other citizens' viewpoints
 • Quality content increases your loyalty score"""
 
-        return f"I have received your message, Citizen {user.username}. The AI integration is being enhanced to provide more sophisticated responses. For now, try asking about your loyalty score, queue status, or platform rules."
+        return f"I have received your message, Citizen {user.username}. My AI systems are temporarily unavailable. For now, try asking about your loyalty score, queue status, or platform rules."
 
     async def _store_chat_message(
         self,

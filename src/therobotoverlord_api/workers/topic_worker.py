@@ -5,6 +5,7 @@ import logging
 from uuid import UUID
 
 from therobotoverlord_api.database.repositories.topic import TopicRepository
+from therobotoverlord_api.services.ai_moderation_service import AIModerationService
 from therobotoverlord_api.workers.base import BaseWorker
 from therobotoverlord_api.workers.base import QueueWorkerMixin
 from therobotoverlord_api.workers.base import create_worker_class
@@ -14,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 class TopicModerationWorker(BaseWorker, QueueWorkerMixin):
     """Worker for processing topic creation queue."""
+
+    def __init__(self):
+        super().__init__()
+        self.ai_moderation = AIModerationService()
 
     async def process_topic_moderation(
         self, ctx: dict, queue_id: UUID, topic_id: UUID
@@ -38,9 +43,8 @@ class TopicModerationWorker(BaseWorker, QueueWorkerMixin):
                 logger.error(f"Topic {topic_id} not found")
                 return False
 
-            # For now, auto-approve all topics (placeholder for AI moderation)
-            # TODO(josh): Replace with actual AI moderation logic - Issue #TBD
-            success = await self._placeholder_topic_moderation(topic)
+            # Use AI moderation service
+            success = await self._ai_topic_moderation(topic)
 
             if success:
                 # TODO(josh): Need to handle AI approval without moderator_pk
@@ -59,33 +63,40 @@ class TopicModerationWorker(BaseWorker, QueueWorkerMixin):
             logger.exception(f"Error moderating topic {topic_id}")
             return False
 
-    async def _placeholder_topic_moderation(self, topic) -> bool:
-        """Placeholder topic moderation logic."""
-        # Simple rules for now:
-        # - Reject if title is too short
-        # - Reject if description is too short
-        # - Reject if contains certain banned words
+    async def _ai_topic_moderation(self, topic) -> bool:
+        """AI-powered topic moderation using The Robot Overlord's standards."""
+        try:
+            # Get user name if available
+            user_name = getattr(topic, "user_name", None) or getattr(
+                topic, "author", None
+            )
 
-        banned_words = ["spam", "test123", "delete"]
+            # Evaluate topic using AI moderation service
+            result = await self.ai_moderation.evaluate_topic(
+                title=topic.title,
+                description=topic.description,
+                user_name=user_name,
+                language="en",  # TODO(josh): Add language detection
+            )
 
-        if len(topic.title.strip()) < 10:
-            logger.info(f"Topic {topic.pk} rejected: title too short")
-            return False
+            # Convert AI result to worker format
+            approved = result.decision in ["No Violation", "Praise"]
 
-        if len(topic.description.strip()) < 20:
-            logger.info(f"Topic {topic.pk} rejected: description too short")
-            return False
-
-        content_lower = f"{topic.title} {topic.description}".lower()
-        for banned_word in banned_words:
-            if banned_word in content_lower:
+            if not approved:
                 logger.info(
-                    f"Topic {topic.pk} rejected: contains banned word '{banned_word}'"
+                    f"Topic {topic.pk} rejected by AI: {result.decision} - {result.reasoning}"
                 )
-                return False
+            else:
+                logger.info(
+                    f"Topic {topic.pk} approved by AI: {result.decision} (confidence: {result.confidence})"
+                )
 
-        # Default to approval
-        return True
+            return approved
+
+        except Exception:
+            logger.exception(f"Error in AI topic moderation for topic {topic.pk}")
+            # Fallback to conservative approval
+            return True
 
 
 # Define worker functions
