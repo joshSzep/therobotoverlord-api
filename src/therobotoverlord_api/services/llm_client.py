@@ -1,5 +1,7 @@
 """LLM client service using pydantic-ai for AI model interactions."""
 
+import logging
+
 from datetime import UTC
 from datetime import datetime
 from typing import Any
@@ -7,10 +9,12 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai import RunContext
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
 
 from therobotoverlord_api.config.settings import get_settings
+from therobotoverlord_api.services.prompt_service import PromptService
+from therobotoverlord_api.services.provider_factory import ProviderFactory
+
+logger = logging.getLogger(__name__)
 
 
 class ModerationResult(BaseModel):
@@ -46,30 +50,32 @@ class LLMClient:
 
     def __init__(self):
         self.settings = get_settings()
+        self.provider_factory = ProviderFactory(self.settings.llm)
 
-        # Initialize Anthropic model with provider
-        provider = AnthropicProvider(api_key=self.settings.llm.api_key)
-        self.model = AnthropicModel(
-            model_name=self.settings.llm.model, provider=provider
-        )
+        # Create models for each agent type using the provider factory
+        self.models = self._create_models()
 
-        # Create moderation agent
+        # Create agents with their specific models
         self.moderation_agent = Agent(
-            model=self.model,
+            model=self.models["moderation"],
             deps_type=dict[str, Any],
             output_type=ModerationResult,
         )
 
-        # Create ToS screening agent
+        self.translation_agent = Agent(
+            model=self.models["translation"],
+            deps_type=dict[str, Any],
+            output_type=ModerationResult,
+        )
+
         self.tos_agent = Agent(
-            model=self.model,
+            model=self.models["tos"],
             deps_type=dict[str, Any],
             output_type=ToSScreeningResult,
         )
 
-        # Create chat response agent
         self.chat_agent = Agent(
-            model=self.model,
+            model=self.models["chat"],
             deps_type=dict[str, Any],
             output_type=ChatResponse,
         )
@@ -222,6 +228,48 @@ Respond as The Robot Overlord would - with authority, intelligence, and belief i
 
         return result.data.message
 
+    def _create_models(self) -> dict[str, Any]:
+        """Create models for each agent type with their specific configurations and providers."""
+        models = {}
+
+        for agent_type in ["moderation", "tos", "chat", "translation"]:
+            config = self.settings.llm.get_agent_config(agent_type)
+
+            try:
+                # Validate provider configuration
+                if not self.provider_factory.validate_provider_config(config):
+                    logger.warning(
+                        f"Invalid configuration for {agent_type} agent with provider {config.provider}. "
+                        f"Missing required API keys or settings."
+                    )
+                    raise ValueError(
+                        f"Invalid provider configuration for {config.provider}"
+                    )
+
+                # Create model using the provider factory
+                models[agent_type] = self.provider_factory.create_model(config)
+                logger.info(
+                    f"Created {agent_type} agent with provider {config.provider} and model {config.model}"
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to create model for {agent_type} agent: {e}")
+                # Fall back to default configuration if agent-specific config fails
+                default_config = self.settings.llm.get_agent_config("default")
+                if self.provider_factory.validate_provider_config(default_config):
+                    logger.info(
+                        f"Falling back to default configuration for {agent_type} agent"
+                    )
+                    models[agent_type] = self.provider_factory.create_model(
+                        default_config
+                    )
+                else:
+                    raise RuntimeError(
+                        f"Cannot create model for {agent_type} agent and default config is also invalid"
+                    ) from e
+
+        return models
+
     async def screen_content_for_tos(
         self,
         content: str,
@@ -241,7 +289,6 @@ Respond as The Robot Overlord would - with authority, intelligence, and belief i
         Returns:
             ToSScreeningResult with approval decision and reasoning
         """
-        from therobotoverlord_api.services.prompt_service import PromptService
 
         prompt_service = PromptService()
 
@@ -277,3 +324,26 @@ Provide your screening decision in the required JSON format.""",
         )
 
         return result.data
+
+    async def run_translation_agent(
+        self, prompt: str, output_type: type, **kwargs
+    ) -> Any:
+        """Run the translation agent with structured output."""
+        # Create a temporary agent with the specified output type
+        translation_agent = Agent(
+            model=self.models["translation"],
+            deps_type=dict[str, Any],
+            output_type=output_type,
+        )
+
+        result = await translation_agent.run(
+            prompt,
+            deps=kwargs.get("deps", {}),
+        )
+
+        return result
+
+
+async def get_llm_client() -> LLMClient:
+    """Get the LLM client instance."""
+    return LLMClient()

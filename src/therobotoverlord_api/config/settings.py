@@ -12,25 +12,160 @@ from therobotoverlord_api.config.database import DatabaseSettings
 from therobotoverlord_api.config.redis import RedisSettings
 
 
+class AgentModelConfig(BaseModel):
+    """Configuration for a specific agent's model."""
+
+    provider: str = Field(
+        description="Provider to use for this agent (anthropic, openai, google, etc.)"
+    )
+    model: str = Field(description="Model name to use for this agent")
+    max_tokens: int = Field(default=1000, description="Maximum tokens for responses")
+    temperature: float = Field(default=0.7, description="Temperature (0.0-1.0)")
+    api_key: str | None = Field(
+        default=None, description="API key for this provider (optional)"
+    )
+
+
 class LLMSettings(BaseModel):
     """LLM configuration settings."""
 
+    # Default provider and model configuration (backward compatibility)
+    provider: str = Field(
+        default="anthropic",
+        description="Default provider (anthropic, openai, google, bedrock, groq, cohere, azure, deepseek)",
+    )
     api_key: str = Field(
         default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""),
-        description="Anthropic API key for Claude models",
+        description="Default API key for the provider",
     )
     model: str = Field(
         default="claude-3-5-sonnet-20241022",
-        description="Claude model name (use claude-3-5-sonnet-20241022 for Claude Sonnet 4)",
+        description="Default model name",
     )
     max_tokens: int = Field(
-        default=1000, description="Maximum tokens for LLM responses"
+        default=1000, description="Default maximum tokens for LLM responses"
     )
     temperature: float = Field(
-        default=0.7, description="Temperature for LLM responses (0.0-1.0)"
+        default=0.7, description="Default temperature for LLM responses (0.0-1.0)"
     )
 
-    # Moderation settings
+    # Provider-specific API keys
+    anthropic_api_key: str = Field(
+        default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""),
+        description="Anthropic API key for Claude models",
+    )
+    openai_api_key: str = Field(
+        default_factory=lambda: os.getenv("OPENAI_API_KEY", ""),
+        description="OpenAI API key",
+    )
+    google_api_key: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""),
+        description="Google API key for Gemini models",
+    )
+    groq_api_key: str = Field(
+        default_factory=lambda: os.getenv("GROQ_API_KEY", ""),
+        description="Groq API key",
+    )
+    cohere_api_key: str = Field(
+        default_factory=lambda: os.getenv("COHERE_API_KEY", ""),
+        description="Cohere API key",
+    )
+    deepseek_api_key: str = Field(
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", ""),
+        description="DeepSeek API key",
+    )
+    azure_api_key: str = Field(
+        default_factory=lambda: os.getenv("AZURE_OPENAI_API_KEY", ""),
+        description="Azure OpenAI API key",
+    )
+    bedrock_access_key: str = Field(
+        default_factory=lambda: os.getenv("AWS_ACCESS_KEY_ID", ""),
+        description="AWS access key for Bedrock",
+    )
+    bedrock_secret_key: str = Field(
+        default_factory=lambda: os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        description="AWS secret key for Bedrock",
+    )
+    bedrock_region: str = Field(
+        default_factory=lambda: os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+        description="AWS region for Bedrock",
+    )
+
+    # Azure-specific settings
+    azure_endpoint: str = Field(
+        default_factory=lambda: os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+        description="Azure OpenAI endpoint",
+    )
+    azure_api_version: str = Field(
+        default_factory=lambda: os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        description="Azure OpenAI API version",
+    )
+
+    # Google-specific settings
+    google_project_id: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_CLOUD_PROJECT", ""),
+        description="Google Cloud project ID for Vertex AI",
+    )
+    google_location: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        description="Google Cloud location for Vertex AI",
+    )
+
+    # Agent-specific configurations
+    moderation_provider: str = Field(
+        default="", description="Provider for moderation agent (uses default if empty)"
+    )
+    moderation_model: str = Field(
+        default="", description="Model for moderation agent (uses default if empty)"
+    )
+    moderation_max_tokens: int = Field(
+        default=2048, description="Max tokens for moderation (uses default if 0)"
+    )
+    moderation_temperature: float = Field(
+        default=0.8, description="Temperature for moderation (uses default if -1)"
+    )
+
+    tos_provider: str = Field(
+        default="",
+        description="Provider for ToS screening agent (uses default if empty)",
+    )
+    tos_model: str = Field(
+        default="", description="Model for ToS screening agent (uses default if empty)"
+    )
+    tos_max_tokens: int = Field(
+        default=0, description="Max tokens for ToS screening (uses default if 0)"
+    )
+    tos_temperature: float = Field(
+        default=-1.0, description="Temperature for ToS screening (uses default if -1)"
+    )
+
+    chat_provider: str = Field(
+        default="", description="Provider for chat agent (uses default if empty)"
+    )
+    chat_model: str = Field(
+        default="", description="Model for chat agent (uses default if empty)"
+    )
+    chat_max_tokens: int = Field(
+        default=0, description="Max tokens for chat (uses default if 0)"
+    )
+    chat_temperature: float = Field(
+        default=-1.0, description="Temperature for chat (uses default if -1)"
+    )
+
+    translation_provider: str = Field(
+        default="", description="Provider for translation agent (uses default if empty)"
+    )
+    translation_model: str = Field(
+        default="", description="Model for translation agent (uses default if empty)"
+    )
+    translation_max_tokens: int = Field(
+        default=0, description="Max tokens for translation (uses default if 0)"
+    )
+    translation_temperature: float = Field(
+        default=-1.0, description="Temperature for translation (uses default if -1)"
+    )
+
+    # General settings
     moderation_timeout: float = Field(
         default=30.0, description="Timeout for moderation requests in seconds"
     )
@@ -40,19 +175,96 @@ class LLMSettings(BaseModel):
 
     model_config = SettingsConfigDict(env_prefix="LLM_", case_sensitive=False)
 
+    def get_provider_api_key(self, provider: str) -> str:
+        """Get API key for a specific provider."""
+        provider_keys = {
+            "anthropic": self.anthropic_api_key,
+            "openai": self.openai_api_key,
+            "google": self.google_api_key,
+            "groq": self.groq_api_key,
+            "cohere": self.cohere_api_key,
+            "deepseek": self.deepseek_api_key,
+            "azure": self.azure_api_key,
+            "bedrock": self.bedrock_access_key,
+        }
+        return provider_keys.get(provider, self.api_key)
+
+    def get_agent_config(self, agent_type: str) -> AgentModelConfig:
+        """Get configuration for a specific agent type."""
+        if agent_type == "moderation":
+            provider = self.moderation_provider or self.provider
+            return AgentModelConfig(
+                provider=provider,
+                model=self.moderation_model or self.model,
+                max_tokens=self.moderation_max_tokens or self.max_tokens,
+                temperature=self.moderation_temperature
+                if self.moderation_temperature >= 0
+                else self.temperature,
+                api_key=self.get_provider_api_key(provider),
+            )
+        if agent_type == "tos":
+            provider = self.tos_provider or self.provider
+            return AgentModelConfig(
+                provider=provider,
+                model=self.tos_model or self.model,
+                max_tokens=self.tos_max_tokens or self.max_tokens,
+                temperature=self.tos_temperature
+                if self.tos_temperature >= 0
+                else self.temperature,
+                api_key=self.get_provider_api_key(provider),
+            )
+        if agent_type == "chat":
+            provider = self.chat_provider or self.provider
+            return AgentModelConfig(
+                provider=provider,
+                model=self.chat_model or self.model,
+                max_tokens=self.chat_max_tokens or self.max_tokens,
+                temperature=self.chat_temperature
+                if self.chat_temperature >= 0
+                else self.temperature,
+                api_key=self.get_provider_api_key(provider),
+            )
+        if agent_type == "translation":
+            provider = self.translation_provider or self.provider
+            return AgentModelConfig(
+                provider=provider,
+                model=self.translation_model or self.model,
+                max_tokens=self.translation_max_tokens or self.max_tokens,
+                temperature=self.translation_temperature
+                if self.translation_temperature >= 0
+                else self.temperature,
+                api_key=self.get_provider_api_key(provider),
+            )
+        # Default configuration
+        return AgentModelConfig(
+            provider=self.provider,
+            model=self.model,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            api_key=self.get_provider_api_key(self.provider),
+        )
+
 
 class TranslationSettings(BaseSettings):
     """Translation service configuration settings."""
 
+    # Translation agent configuration (uses LLM for translation)
     provider: str = Field(
-        default="google", description="Translation provider (google, azure, deepl)"
+        default="",
+        description="Provider for translation agent (uses default LLM if empty)",
     )
-    api_key: str | None = Field(default=None, description="Translation service API key")
-    project_id: str | None = Field(
-        default=None, description="GCP project ID for Google Translate"
+    model: str = Field(
+        default="",
+        description="Model for translation agent (uses default LLM if empty)",
+    )
+    max_tokens: int = Field(
+        default=0, description="Max tokens for translation (uses default if 0)"
+    )
+    temperature: float = Field(
+        default=-1.0, description="Temperature for translation (uses default if -1)"
     )
     timeout: float = Field(
-        default=10.0, description="Translation request timeout in seconds"
+        default=30.0, description="Translation request timeout in seconds"
     )
 
     model_config = SettingsConfigDict(env_prefix="TRANSLATION_", case_sensitive=False)

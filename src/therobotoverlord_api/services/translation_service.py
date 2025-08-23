@@ -2,7 +2,11 @@
 
 import logging
 
+from typing import ClassVar
 from uuid import UUID
+
+from pydantic import BaseModel
+from pydantic import Field
 
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.translation import ContentWithTranslation
@@ -12,128 +16,224 @@ from therobotoverlord_api.database.models.translation import TranslationCreate
 from therobotoverlord_api.database.models.translation import TranslationResult
 from therobotoverlord_api.database.models.translation import TranslationUpdate
 from therobotoverlord_api.database.repositories.translation import TranslationRepository
+from therobotoverlord_api.services.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
+
+
+class CombinedTranslationResponse(BaseModel):
+    """Structured response for combined language detection and translation."""
+
+    detected_language: str = Field(
+        description="ISO 639-1 language code of the detected language (e.g., 'en', 'es', 'fr')"
+    )
+    confidence: float = Field(
+        description="Confidence score for language detection (0.0 to 1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    is_english: bool = Field(description="Whether the detected language is English")
+    translation: str | None = Field(
+        description="English translation of the text (None if already English)",
+        default=None,
+    )
 
 
 class TranslationService:
     """Service for handling content translation operations."""
 
+    SUPPORTED_LANGUAGES: ClassVar[set[str]] = {
+        "en",
+        "es",
+        "fr",
+        "de",
+        "it",
+        "pt",
+        "ru",
+        "zh",
+        "ja",
+        "ko",
+        "ar",
+        "hi",
+    }
+
     def __init__(self):
         self.translation_repo = TranslationRepository()
+        self.llm_client = None
+
+    async def _get_llm_client(self):
+        """Get LLM client instance."""
+        if self.llm_client is None:
+            self.llm_client = await get_llm_client()
+        return self.llm_client
+
+    async def detect_language_and_translate(
+        self, content: str
+    ) -> CombinedTranslationResponse:
+        """
+        Detect language and translate to English in a single LLM call for cost efficiency.
+        """
+        llm_client = await self._get_llm_client()
+
+        prompt = f"""Analyze the following text and:
+1. Detect its language (provide ISO 639-1 code like 'en', 'es', 'fr', 'de', 'zh', 'ja', etc.)
+2. Determine your confidence in the detection (0.0 to 1.0)
+3. Check if it's already in English
+4. If not English, provide an accurate English translation
+
+Text: {content[:1000]}"""  # Increased limit since we're doing both tasks
+
+        try:
+            response = await llm_client.run_translation_agent(
+                prompt, output_type=CombinedTranslationResponse
+            )
+
+            # Validate the detected language is supported
+            if response.detected_language not in self.SUPPORTED_LANGUAGES:
+                logger.warning(
+                    f"LLM detected unsupported language: {response.detected_language}"
+                )
+                # Fall back to heuristic detection
+                fallback_result = await self._fallback_language_detection(content)
+                return CombinedTranslationResponse(
+                    detected_language=fallback_result.detected_language or "en",
+                    confidence=fallback_result.confidence or 0.5,
+                    is_english=fallback_result.is_english,
+                    translation=None if fallback_result.is_english else content,
+                )
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error in combined LLM translation: {e}")
+            # Fall back to heuristic detection
+            fallback_result = await self._fallback_language_detection(content)
+            return CombinedTranslationResponse(
+                detected_language=fallback_result.detected_language or "en",
+                confidence=fallback_result.confidence or 0.5,
+                is_english=fallback_result.is_english,
+                translation=None if fallback_result.is_english else content,
+            )
 
     async def detect_language(self, content: str) -> LanguageDetectionResult:
         """
-        Detect the language of content.
-
-        Placeholder implementation - replace with actual language detection.
+        Detect the language of content (legacy method for backward compatibility).
+        Uses the combined approach internally.
         """
-        # Placeholder: Simple heuristic detection
-        # TODO(josh): Replace with actual language detection service (e.g., langdetect, Google Translate API)
-
-        # Simple check for common non-English patterns
-        non_english_indicators = [
-            "ñ",
-            "ç",
-            "ü",
-            "ö",
-            "ä",
-            "é",
-            "è",
-            "à",
-            "ù",
-            "ì",
-            "ò",  # European
-            "ж",
-            "ш",
-            "щ",
-            "ч",
-            "ц",
-            "\u0445",  # Cyrillic small letter ha
-            "ф",
-            "т",
-            "\u0441",  # Cyrillic small letter es
-            "\u0440",  # Cyrillic small letter er
-            "的",
-            "是",
-            "在",
-            "了",
-            "和",
-            "有",
-            "我",
-            "你",
-            "他",
-            "她",  # Chinese
-            "の",
-            "は",
-            "が",
-            "を",
-            "に",
-            "で",
-            "と",
-            "も",
-            "から",
-            "まで",  # Japanese
-        ]
-
-        has_non_english = any(
-            char in content.lower() for char in non_english_indicators
+        combined_result = await self.detect_language_and_translate(content)
+        return LanguageDetectionResult(
+            detected_language=combined_result.detected_language,
+            confidence=combined_result.confidence,
+            is_english=combined_result.is_english,
         )
 
-        if has_non_english:
-            # Placeholder: Return a detected language
-            detected_lang = "es"  # Default to Spanish for demo
-            confidence = 0.8
-        else:
-            detected_lang = None
-            confidence = 0.9
+    async def _fallback_language_detection(
+        self, content: str
+    ) -> LanguageDetectionResult:
+        """Fallback language detection using simple heuristics."""
+        # Check for specific language patterns
+        content_lower = content.lower()
 
+        # Check for Spanish
+        if any(
+            indicator in content_lower
+            for indicator in [
+                "ñ",
+                "¿",
+                "¡",
+                "mañana",
+                "niño",
+                "será",
+                "día",
+            ]
+        ):
+            return LanguageDetectionResult(
+                detected_language="es",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Check for French
+        if any(char in content for char in "àâäéèêëîïôöùûüÿç"):
+            return LanguageDetectionResult(
+                detected_language="fr",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Check for Chinese characters
+        if any("\u4e00" <= char <= "\u9fff" for char in content):
+            return LanguageDetectionResult(
+                detected_language="zh",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Check for Cyrillic characters
+        if any("\u0400" <= char <= "\u04ff" for char in content):
+            return LanguageDetectionResult(
+                detected_language="ru",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Check for Japanese characters
+        if any("\u3040" <= char <= "\u30ff" for char in content):
+            return LanguageDetectionResult(
+                detected_language="ja",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Check for Korean characters
+        if any("\u1100" <= char <= "\u11ff" for char in content):
+            return LanguageDetectionResult(
+                detected_language="ko",
+                confidence=0.8,
+                is_english=False,
+            )
+
+        # Default to English if no non-English patterns found
         return LanguageDetectionResult(
-            detected_language=detected_lang,
-            confidence=confidence,
-            is_english=not has_non_english,
+            detected_language="en",
+            confidence=0.9,
+            is_english=True,
         )
 
     async def translate_to_english(
         self, content: str, source_language: str | None = None
     ) -> TranslationResult:
         """
-        Translate content to English.
-
-        Placeholder implementation - replace with actual translation service.
+        Translate content to English using the combined LLM approach for cost efficiency.
         """
-        # Placeholder: Mock translation
-        # TODO(josh): Replace with actual translation service (e.g., OpenAI, Google Translate)
+        # Use the combined approach to get both detection and translation in one call
+        combined_result = await self.detect_language_and_translate(content)
 
-        if not source_language:
-            detection = await self.detect_language(content)
-            source_language = detection.detected_language or "en"
-
-        if source_language == "en":
+        if combined_result.is_english:
             # Already English
             return TranslationResult(
                 original_content=content,
                 translated_content=content,
-                source_language="en",
+                source_language=combined_result.detected_language,
                 target_language="en",
-                quality_score=1.0,
-                provider="none",
-                metadata={"reason": "already_english"},
+                quality_score=combined_result.confidence,
+                provider="llm",
+                metadata={"reason": "already_english", "method": "combined_detection"},
             )
 
-        # Placeholder translation
-        translated_content = f"[TRANSLATED FROM {source_language.upper()}] {content}"
+        # Use the translation from the combined result
+        translated_content = combined_result.translation or content
 
         return TranslationResult(
             original_content=content,
             translated_content=translated_content,
-            source_language=source_language,
+            source_language=combined_result.detected_language,
             target_language="en",
-            quality_score=0.85,  # Mock quality score
-            provider="placeholder",
+            quality_score=combined_result.confidence,
+            provider="llm",
             metadata={
-                "source_language": source_language,
-                "method": "placeholder_translation",
+                "source_language": combined_result.detected_language,
+                "method": "combined_translation",
             },
         )
 
