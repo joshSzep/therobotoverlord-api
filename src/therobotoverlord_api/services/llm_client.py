@@ -156,6 +156,7 @@ Chat context: {context.get("chat_history", "New conversation")}
         self,
         decision: str,
         content: str,
+        content_type: str,
         user_name: str,
         reasoning: str,
         context: dict[str, Any] | None = None,
@@ -173,7 +174,7 @@ Chat context: {context.get("chat_history", "New conversation")}
         Returns:
             Feedback message from The Robot Overlord
         """
-        content_type = context.get("content_type", "content") if context else "content"
+        # Use provided content_type parameter
 
         feedback_prompt = f"""
 You are The Robot Overlord. You have made a moderation decision of "{decision}"

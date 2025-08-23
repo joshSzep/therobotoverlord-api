@@ -82,7 +82,11 @@ class AppSettings(BaseSettings):
     # Component settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
-    auth: AuthSettings = Field(default_factory=lambda: AuthSettings())
+    auth: AuthSettings = Field(
+        default_factory=lambda: AuthSettings(
+            google_client_id="", google_client_secret="", jwt_secret_key=""
+        )
+    )
     llm: LLMSettings = Field(default_factory=LLMSettings)
     translation: TranslationSettings = Field(default_factory=TranslationSettings)
 
@@ -97,7 +101,7 @@ _settings: AppSettings | None = None
 
 def get_settings() -> AppSettings:
     """Get application settings (singleton pattern)."""
-    global _settings
+    global _settings  # noqa: PLW0603
     if _settings is None:
         _settings = AppSettings()
     return _settings

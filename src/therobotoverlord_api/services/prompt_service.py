@@ -79,10 +79,12 @@ class PromptService:
         examples = []
         examples_dir = self.components_dir / "examples" / content_type
         if examples_dir.exists():
-            examples.extend([
-                example_file.read_text().strip()
-                for example_file in examples_dir.glob("*.md")
-            ])
+            examples.extend(
+                [
+                    example_file.read_text().strip()
+                    for example_file in examples_dir.glob("*.md")
+                ]
+            )
 
         # Assemble the prompt
         assembled_prompt = (
