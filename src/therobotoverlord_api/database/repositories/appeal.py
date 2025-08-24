@@ -283,6 +283,8 @@ class AppealRepository(BaseRepository[Appeal]):
                 COUNT(*) FILTER (WHERE status = 'sustained') as total_sustained,
                 COUNT(*) FILTER (WHERE status = 'denied') as total_denied,
                 COUNT(*) FILTER (WHERE status = 'withdrawn') as total_withdrawn,
+                COUNT(*) as total_count,
+                COUNT(*) FILTER (WHERE submitted_at::date = CURRENT_DATE) as total_today,
                 AVG(EXTRACT(EPOCH FROM (reviewed_at - submitted_at)) / 3600)
                     FILTER (WHERE reviewed_at IS NOT NULL) as avg_review_hours
             FROM appeals
@@ -352,18 +354,31 @@ class AppealRepository(BaseRepository[Appeal]):
                 for record in reviewer_records
             ]
 
+            # Extract values with defaults
+            total_pending = stats_record["total_pending"] or 0 if stats_record else 0
+            total_under_review = (
+                stats_record["total_under_review"] or 0 if stats_record else 0
+            )
+            total_sustained = (
+                stats_record["total_sustained"] or 0 if stats_record else 0
+            )
+            total_denied = stats_record["total_denied"] or 0 if stats_record else 0
+            total_withdrawn = (
+                stats_record["total_withdrawn"] or 0 if stats_record else 0
+            )
+            total_count = stats_record["total_count"] or 0 if stats_record else 0
+            total_today = stats_record["total_today"] or 0 if stats_record else 0
+
             return AppealStats(
-                total_pending=stats_record["total_pending"] or 0 if stats_record else 0,
-                total_under_review=stats_record["total_under_review"] or 0
-                if stats_record
-                else 0,
-                total_sustained=stats_record["total_sustained"] or 0
-                if stats_record
-                else 0,
-                total_denied=stats_record["total_denied"] or 0 if stats_record else 0,
-                total_withdrawn=stats_record["total_withdrawn"] or 0
-                if stats_record
-                else 0,
+                total_pending=total_pending,
+                total_under_review=total_under_review,
+                total_sustained=total_sustained,
+                total_denied=total_denied,
+                total_withdrawn=total_withdrawn,
+                total_count=total_count,
+                total_today=total_today,
+                sustained_count=total_sustained,  # Alias
+                denied_count=total_denied,  # Alias
                 average_review_time_hours=stats_record["avg_review_hours"]
                 if stats_record
                 else None,
@@ -436,3 +451,43 @@ class AppealRepository(BaseRepository[Appeal]):
             """
 
         return "SELECT FALSE as valid"  # Default to invalid
+
+    async def approve_appeal(
+        self, appeal_id: UUID, feedback: str | None = None
+    ) -> bool:
+        """Approve an appeal."""
+        try:
+            async with get_db_connection() as connection:
+                query = """
+                    UPDATE appeals
+                    SET status = $1,
+                        updated_at = NOW(),
+                        moderator_feedback = $2
+                    WHERE pk = $3
+                    RETURNING pk
+                """
+                result = await connection.fetchrow(
+                    query, AppealStatus.SUSTAINED.value, feedback, appeal_id
+                )
+                return result is not None
+        except Exception:
+            return False
+
+    async def reject_appeal(self, appeal_id: UUID, feedback: str | None = None) -> bool:
+        """Reject an appeal."""
+        try:
+            async with get_db_connection() as connection:
+                query = """
+                    UPDATE appeals
+                    SET status = $1,
+                        updated_at = NOW(),
+                        moderator_feedback = $2
+                    WHERE pk = $3
+                    RETURNING pk
+                """
+                result = await connection.fetchrow(
+                    query, AppealStatus.DENIED.value, feedback, appeal_id
+                )
+                return result is not None
+        except Exception:
+            return False

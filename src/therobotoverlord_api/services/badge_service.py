@@ -248,13 +248,177 @@ class BadgeService:
             logger.error(f"Error evaluating badge criteria for user {user_id}: {e}")
             return []
 
-    async def _evaluate_badge_criteria(
-        self, user_id: UUID, criteria_config: dict
+    async def process_moderation_outcome(
+        self,
+        user_id: UUID,
+        content_type: str,
+        outcome: str,
+        content_id: UUID | None = None,
+        rejection_reason: str | None = None,
+        websocket_manager: WebSocketManager | None = None,
+    ) -> list[UserBadge]:
+        """Process moderation outcome and award appropriate badges."""
+        awarded_badges = []
+
+        try:
+            # Get all active badges
+            badges = await self.badge_repo.get_active_badges()
+
+            for badge in badges:
+                # Skip if user already has this badge
+                if await self.user_badge_repo.has_badge(user_id, badge.pk):
+                    continue
+
+                # Check if this moderation outcome triggers badge eligibility
+                if await self._should_award_badge_for_outcome(
+                    user_id, badge, content_type, outcome, rejection_reason
+                ):
+                    user_badge_data = UserBadgeCreate(
+                        user_pk=user_id,
+                        badge_pk=badge.pk,
+                        awarded_for_post_pk=content_id
+                        if content_type == "post"
+                        else None,
+                        awarded_for_topic_pk=content_id
+                        if content_type == "topic"
+                        else None,
+                        awarded_by_event=f"moderation_{outcome}",
+                    )
+
+                    try:
+                        user_badge = await self.user_badge_repo.create_from_dict(
+                            user_badge_data.model_dump()
+                        )
+                        awarded_badges.append(user_badge)
+
+                        # Send WebSocket notification
+                        if websocket_manager:
+                            try:
+                                broadcaster = get_event_broadcaster(websocket_manager)
+                                await broadcaster.broadcast_badge_earned(
+                                    user_id=user_id,
+                                    badge_id=badge.pk,
+                                    badge_name=badge.name,
+                                    badge_description=badge.description,
+                                    badge_icon=badge.image_url,
+                                )
+                            except Exception as ws_error:
+                                logger.warning(
+                                    f"Failed to broadcast badge earned: {ws_error}"
+                                )
+
+                        logger.info(
+                            f"Awarded badge '{badge.name}' to user {user_id} for {outcome} {content_type}"
+                        )
+
+                    except Exception as award_error:
+                        logger.error(
+                            f"Failed to award badge {badge.pk} to user {user_id}: {award_error}"
+                        )
+
+        except Exception as e:
+            logger.error(f"Error processing moderation outcome for user {user_id}: {e}")
+
+        return awarded_badges
+
+    async def _should_award_badge_for_outcome(
+        self,
+        user_id: UUID,
+        badge: Badge,
+        content_type: str,
+        outcome: str,
+        rejection_reason: str | None = None,
     ) -> bool:
-        """Evaluate if user meets badge criteria (simplified for testing)."""
-        # This is a simplified version for testing purposes
-        # In reality, this would check specific badge criteria
-        return True
+        """Check if a moderation outcome should trigger badge award."""
+        criteria = badge.criteria_config
+        criteria_type = criteria.get("type")
+
+        # Check positive badges for approved content
+        if outcome == "approved" and badge.badge_type == "positive":
+            if criteria_type == "first_approved_post":
+                return await self._check_first_approved_post_eligibility(user_id)
+            if criteria_type == "approved_posts":
+                return await self._check_approved_posts_eligibility(user_id, criteria)
+
+        # Check negative badges for rejected content
+        if (
+            outcome == "rejected"
+            and badge.badge_type == "negative"
+            and criteria_type == "rejected_posts"
+        ):
+            return await self._check_rejected_posts_eligibility(
+                user_id, criteria, rejection_reason
+            )
+
+        return False
+
+    async def _check_first_approved_post_eligibility(self, user_id: UUID) -> bool:
+        """Check if this is the user's first approved post."""
+        query = """
+            SELECT COUNT(*)
+            FROM moderation_events
+            WHERE user_id = $1 AND outcome = 'approved' AND content_type = 'post'
+        """
+
+        async with get_db_connection() as connection:
+            count = await connection.fetchval(query, user_id) or 0
+            return count == 1  # This is their first approved post
+
+    async def _check_approved_posts_eligibility(
+        self, user_id: UUID, criteria: dict
+    ) -> bool:
+        """Check if user meets approved posts criteria."""
+        required_count = criteria.get("count", 1)
+        criteria_filter = criteria.get("criteria")
+
+        query = """
+            SELECT COUNT(*)
+            FROM moderation_events me
+            WHERE me.user_id = $1
+            AND me.outcome = 'approved'
+            AND me.content_type = 'post'
+        """
+        params = [user_id]
+
+        # Add specific criteria filters if needed
+        if criteria_filter == "logic_heavy":
+            # Check for posts marked as logic-heavy in moderation feedback
+            query += " AND me.feedback_tags ? 'logic_heavy'"
+        elif criteria_filter == "well_sourced":
+            # Check for posts marked as well-sourced
+            query += " AND me.feedback_tags ? 'well_sourced'"
+
+        async with get_db_connection() as connection:
+            count = await connection.fetchval(query, *params) or 0
+            return count >= required_count
+
+    async def _check_rejected_posts_eligibility(
+        self, user_id: UUID, criteria: dict, rejection_reason: str | None = None
+    ) -> bool:
+        """Check if user meets rejected posts criteria for negative badges."""
+        required_count = criteria.get("count", 1)
+        criteria_filter = criteria.get("criteria")
+
+        # Only award if the rejection reason matches the badge criteria
+        if criteria_filter and rejection_reason != criteria_filter:
+            return False
+
+        query = """
+            SELECT COUNT(*)
+            FROM moderation_events me
+            WHERE me.user_id = $1
+            AND me.outcome = 'rejected'
+            AND me.content_type = 'post'
+        """
+        params = [user_id]
+
+        if criteria_filter:
+            query += " AND me.rejection_reason = $2"
+            params.append(criteria_filter)
+
+        async with get_db_connection() as connection:
+            count = await connection.fetchval(query, *params) or 0
+            return count >= required_count
 
     async def _check_badge_eligibility(
         self, user_id: UUID, badge: Badge

@@ -21,7 +21,18 @@ from arq.connections import RedisSettings as ArqRedisSettings
 from arq.worker import Worker
 
 from therobotoverlord_api.config.redis import get_redis_settings
+from therobotoverlord_api.workers.analytics_worker import cleanup_old_snapshots
+from therobotoverlord_api.workers.analytics_worker import generate_daily_snapshot
+from therobotoverlord_api.workers.analytics_worker import generate_hourly_snapshot
+from therobotoverlord_api.workers.analytics_worker import generate_monthly_snapshot
+from therobotoverlord_api.workers.analytics_worker import generate_weekly_snapshot
+from therobotoverlord_api.workers.appeal_worker import process_appeal_review
+from therobotoverlord_api.workers.health_monitor import check_worker_health
+from therobotoverlord_api.workers.health_monitor import cleanup_failed_jobs
 from therobotoverlord_api.workers.post_worker import process_post_moderation
+from therobotoverlord_api.workers.private_message_worker import (
+    process_private_message_moderation,
+)
 from therobotoverlord_api.workers.topic_worker import process_topic_moderation
 
 # Configure logging
@@ -65,11 +76,49 @@ class WorkerManager:
                     "name": "topic_moderation_worker",
                     "functions": [process_topic_moderation],
                     "queue_name": "topic_moderation",
+                    "max_jobs": 5,
+                    "job_timeout": 120,
                 },
                 {
                     "name": "post_moderation_worker",
                     "functions": [process_post_moderation],
                     "queue_name": "post_moderation",
+                    "max_jobs": 10,
+                    "job_timeout": 60,
+                },
+                {
+                    "name": "private_message_worker",
+                    "functions": [process_private_message_moderation],
+                    "queue_name": "private_message_moderation",
+                    "max_jobs": 8,
+                    "job_timeout": 30,
+                },
+                {
+                    "name": "appeal_worker",
+                    "functions": [process_appeal_review],
+                    "queue_name": "appeal_review",
+                    "max_jobs": 3,
+                    "job_timeout": 180,
+                },
+                {
+                    "name": "analytics_worker",
+                    "functions": [
+                        generate_hourly_snapshot,
+                        generate_daily_snapshot,
+                        generate_weekly_snapshot,
+                        generate_monthly_snapshot,
+                        cleanup_old_snapshots,
+                    ],
+                    "queue_name": "analytics",
+                    "max_jobs": 2,
+                    "job_timeout": 300,
+                },
+                {
+                    "name": "health_monitor_worker",
+                    "functions": [check_worker_health, cleanup_failed_jobs],
+                    "queue_name": "health_monitor",
+                    "max_jobs": 1,
+                    "job_timeout": 60,
                 },
             ]
 
@@ -79,8 +128,8 @@ class WorkerManager:
                     functions=config["functions"],
                     redis_pool=self.redis_pool,
                     queue_name=config["queue_name"],
-                    max_jobs=5,  # Process up to 5 jobs concurrently per worker
-                    job_timeout=300,  # 5 minute timeout per job
+                    max_jobs=config.get("max_jobs", 5),
+                    job_timeout=config.get("job_timeout", 300),
                     keep_result=3600,  # Keep results for 1 hour
                 )
 

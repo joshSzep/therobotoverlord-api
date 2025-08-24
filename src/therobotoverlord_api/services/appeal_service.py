@@ -1,7 +1,10 @@
 """Appeal service for The Robot Overlord API."""
 
+import logging
+
 from datetime import UTC
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from therobotoverlord_api.database.models.appeal import Appeal
@@ -13,6 +16,10 @@ from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealUpdate
 from therobotoverlord_api.database.models.appeal import AppealWithContent
+from therobotoverlord_api.database.models.appeal_history import AppealHistoryAction
+from therobotoverlord_api.database.models.appeal_history import AppealHistoryCreate
+from therobotoverlord_api.database.models.appeal_history import AppealHistoryEntry
+from therobotoverlord_api.database.models.appeal_history import AppealStatusSummary
 from therobotoverlord_api.database.models.appeal_with_editing import (
     AppealDecisionWithEdit,
 )
@@ -21,40 +28,51 @@ from therobotoverlord_api.database.models.appeal_with_editing import (
 )
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.repositories.appeal import AppealRepository
+from therobotoverlord_api.database.repositories.appeal_history_repository import (
+    AppealHistoryRepository,
+)
 from therobotoverlord_api.services.content_restoration_service import (
     ContentRestorationService,
 )
 from therobotoverlord_api.services.loyalty_score_service import LoyaltyScoreService
 from therobotoverlord_api.services.queue_service import QueueService
+from therobotoverlord_api.websocket.manager import WebSocketManager
+from therobotoverlord_api.websocket.models import WebSocketEventType
+from therobotoverlord_api.websocket.models import WebSocketMessage
+
+logger = logging.getLogger(__name__)
 
 
 class AppealService:
     """Service for managing appeals workflow."""
 
-    def __init__(
-        self,
-        appeal_repository: AppealRepository | None = None,
-        loyalty_score_service: LoyaltyScoreService | None = None,
-        queue_service: QueueService | None = None,
-        content_restoration_service: ContentRestorationService | None = None,
-    ):
-        self.appeal_repository = appeal_repository or AppealRepository()
-        self.loyalty_score_service = loyalty_score_service or LoyaltyScoreService()
-        self.queue_service = queue_service or QueueService()
-        self.content_restoration_service = (
-            content_restoration_service or ContentRestorationService()
-        )
+    def __init__(self):
+        """Initialize the appeal service."""
+        self.appeal_repository = AppealRepository()
+        self.appeal_history_repository = AppealHistoryRepository()
+        self.queue_service = QueueService()
+        self.websocket_manager = WebSocketManager()
+        self.loyalty_score_service = LoyaltyScoreService()
+        self.content_restoration_service = ContentRestorationService()
+        self._rate_limit_cache: dict[UUID, datetime] = {}
 
     async def submit_appeal(
         self, user_pk: UUID, appeal_data: AppealCreate
     ) -> tuple[Appeal | None, str]:
         """
-        Submit a new appeal.
+        Submit a new appeal with rate limiting.
 
         Returns:
             Tuple of (Appeal, error_message). Appeal is None if submission failed.
         """
-        # Check eligibility first
+        # Check rate limiting (1 appeal per 5 minutes per user)
+        if not await self._check_rate_limit(user_pk):
+            return (
+                None,
+                "Rate limit exceeded. You can only submit one appeal every 5 minutes.",
+            )
+
+        # Check eligibility
         eligibility = await self.check_appeal_eligibility(
             user_pk, appeal_data.content_type, appeal_data.content_pk
         )
@@ -65,9 +83,26 @@ class AppealService:
         # Create the appeal
         appeal = await self.appeal_repository.create_appeal(appeal_data, user_pk)
 
+        # Update rate limit cache
+        self._rate_limit_cache[user_pk] = datetime.now(UTC)
+
         # Add to appeals queue for processing
         await self.queue_service.add_appeal_to_queue(appeal.pk)
 
+        # Send WebSocket notification to moderators
+        await self.websocket_manager.broadcast_to_channel(
+            "moderator",
+            WebSocketMessage(
+                event_type=WebSocketEventType.NEW_APPEAL,
+                data={
+                    "appeal_id": str(appeal.pk),
+                    "content_type": appeal_data.content_type.value,
+                    "priority": "normal",
+                },
+            ),
+        )
+
+        logger.info(f"Appeal {appeal.pk} submitted by user {user_pk}")
         return appeal, ""
 
     async def check_appeal_eligibility(
@@ -236,6 +271,9 @@ class AppealService:
         # Process the decision consequences
         await self._process_appeal_decision(appeal, decision, reviewer_pk)
 
+        # Send WebSocket notification to appellant
+        await self._send_appeal_outcome_notification(appeal, decision)
+
         return True, ""
 
     async def decide_appeal_with_edit(
@@ -288,6 +326,9 @@ class AppealService:
         elif decision == AppealStatus.DENIED:
             await self._process_denied_appeal(appeal)
 
+        # Send WebSocket notification to appellant
+        await self._send_appeal_outcome_notification(appeal, decision)
+
         return True, ""
 
     async def get_appeal_statistics(self) -> AppealStats:
@@ -334,11 +375,7 @@ class AppealService:
             points_awarded=50,  # Configurable
         )
 
-        # TODO(josh): Implement content restoration logic
-        # This would involve:
-        # - Restoring rejected/removed content
-        # - Updating content status
-        # - Notifying relevant parties
+        logger.info(f"Content restoration for appeal {appeal.pk} not yet implemented")
 
         # TODO(josh): Consider moderator feedback/training
         # Track moderation accuracy for quality improvement
@@ -414,6 +451,9 @@ class AppealService:
             points_awarded=-5,  # Small penalty
         )
 
+        # Apply sanctions for repeated denied appeals
+        await self._apply_sanctions_for_denied_appeal(appeal)
+
     async def get_appealable_content(
         self, user_pk: UUID, content_type: ContentType, content_pk: UUID
     ) -> dict | None:
@@ -432,3 +472,115 @@ class AppealService:
             "moderated_at": datetime.now(UTC),  # Would be fetched from DB
             "moderation_reason": "Violation of community guidelines",  # From DB
         }
+
+    async def _check_rate_limit(self, user_pk: UUID) -> bool:
+        """Check if user has exceeded rate limit for appeal submissions."""
+        last_submission = self._rate_limit_cache.get(user_pk)
+        if not last_submission:
+            return True
+
+        # 5 minutes = 300 seconds
+        time_since_last = (datetime.now(UTC) - last_submission).total_seconds()
+        return time_since_last >= 300
+
+    async def _send_appeal_outcome_notification(
+        self, appeal: Appeal, decision: AppealStatus
+    ) -> None:
+        """Send WebSocket notification to appellant about appeal outcome."""
+        try:
+            await self.websocket_manager.send_to_user(
+                appeal.appellant_pk,
+                WebSocketMessage(
+                    event_type=WebSocketEventType.APPEAL_OUTCOME,
+                    data={
+                        "appeal_id": str(appeal.pk),
+                        "decision": decision.value,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                ),
+            )
+            logger.info(f"Sent appeal outcome notification for appeal {appeal.pk}")
+        except Exception:
+            logger.exception(
+                f"Failed to send appeal outcome notification for appeal {appeal.pk}"
+            )
+
+    async def _apply_sanctions_for_denied_appeal(self, appeal: Appeal) -> None:
+        """Apply sanctions if user has too many denied appeals."""
+        try:
+            # Count denied appeals in the last 30 days
+            from datetime import timedelta
+
+            cutoff_date = datetime.now(UTC) - timedelta(days=30)
+
+            denied_count = (
+                await self.appeal_repository.count_user_appeals_by_status_since(
+                    appeal.appellant_pk, AppealStatus.DENIED, cutoff_date
+                )
+            )
+
+            # Apply escalating sanctions
+            if denied_count >= 5:  # 5+ denied appeals in 30 days
+                # Apply temporary ban from submitting appeals
+                await self._apply_appeal_ban(appeal.appellant_pk, days=7)
+                logger.warning(
+                    f"Applied 7-day appeal ban to user {appeal.appellant_pk} for {denied_count} denied appeals"
+                )
+            elif denied_count >= 3:  # 3+ denied appeals in 30 days
+                # Apply warning and reduced loyalty score
+                await self.loyalty_score_service.record_appeal_outcome(
+                    user_pk=appeal.appellant_pk,
+                    appeal_pk=appeal.pk,
+                    outcome="frivolous_appeal_penalty",
+                    points_awarded=-25,
+                )
+                logger.info(
+                    f"Applied frivolous appeal penalty to user {appeal.appellant_pk}"
+                )
+
+        except Exception:
+            logger.exception(f"Failed to apply sanctions for denied appeal {appeal.pk}")
+
+    async def _apply_appeal_ban(self, user_pk: UUID, days: int) -> None:
+        """Apply temporary ban from submitting appeals."""
+        # This would integrate with the sanctions system
+        # For now, just log the action
+        logger.info(f"Would apply {days}-day appeal ban to user {user_pk}")
+        # TODO(josh): Integrate with sanctions service to apply actual ban
+
+    # Appeal History Methods
+    async def get_appeal_history(self, appeal_pk: UUID) -> list[AppealHistoryEntry]:
+        """Get complete history for an appeal."""
+        return await self.appeal_history_repository.get_appeal_history(appeal_pk)
+
+    async def get_user_appeal_history(
+        self, user_pk: UUID, limit: int = 50
+    ) -> list[AppealHistoryEntry]:
+        """Get appeal history for a specific user."""
+        return await self.appeal_history_repository.get_user_appeal_history(
+            user_pk, limit
+        )
+
+    async def get_appeal_status_summary(
+        self, appeal_pk: UUID
+    ) -> AppealStatusSummary | None:
+        """Get status summary for an appeal."""
+        return await self.appeal_history_repository.get_appeal_status_summary(appeal_pk)
+
+    async def _log_appeal_action(
+        self,
+        appeal_pk: UUID,
+        action: AppealHistoryAction,
+        actor_pk: UUID | None = None,
+        details: dict[str, Any] | None = None,
+        notes: str | None = None,
+    ) -> None:
+        """Log an appeal action to history."""
+        history_entry = AppealHistoryCreate(
+            appeal_pk=appeal_pk,
+            action=action,
+            actor_pk=actor_pk,
+            details=details,
+            notes=notes,
+        )
+        await self.appeal_history_repository.create_history_entry(history_entry)

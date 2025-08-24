@@ -13,7 +13,9 @@ from fastapi.testclient import TestClient
 
 from therobotoverlord_api.api.users import router as users_router
 from therobotoverlord_api.auth.dependencies import get_current_user
-from therobotoverlord_api.database.models.badge import UserBadge
+from therobotoverlord_api.database.models.badge import Badge
+from therobotoverlord_api.database.models.badge import BadgeType
+from therobotoverlord_api.database.models.badge import UserBadgeWithDetails
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.post import Post
 from therobotoverlord_api.database.models.user import User
@@ -302,14 +304,27 @@ class TestGetUserBadges:
         """Test successful user badges retrieval."""
         # Mock badges
         now = datetime.now(UTC)
+        badge_pk = uuid4()
         mock_badges = [
-            UserBadge(
+            UserBadgeWithDetails(
                 pk=uuid4(),
                 user_pk=sample_user.pk,
-                badge_pk=uuid4(),
+                badge_pk=badge_pk,
                 awarded_at=now,
                 created_at=now,
                 updated_at=now,
+                badge=Badge(
+                    pk=badge_pk,
+                    name="Test Badge",
+                    description="A test badge",
+                    badge_type=BadgeType.POSITIVE,
+                    criteria_config={"type": "test"},
+                    image_url="test.png",
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                username=sample_user.username,
             )
         ]
 

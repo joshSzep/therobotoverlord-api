@@ -39,11 +39,11 @@ class TestAppealServiceEditing:
     @pytest.fixture
     def service(self, mock_appeal_repo, mock_loyalty_service, mock_restoration_service):
         """AppealService instance with mocked dependencies."""
-        return AppealService(
-            appeal_repository=mock_appeal_repo,
-            loyalty_score_service=mock_loyalty_service,
-            content_restoration_service=mock_restoration_service,
-        )
+        service = AppealService()
+        service.appeal_repository = mock_appeal_repo
+        service.loyalty_score_service = mock_loyalty_service
+        service.content_restoration_service = mock_restoration_service
+        return service
 
     @pytest.fixture
     def sample_appeal(self):

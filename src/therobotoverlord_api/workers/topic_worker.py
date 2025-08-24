@@ -12,6 +12,9 @@ from therobotoverlord_api.workers.base import create_worker_class
 
 logger = logging.getLogger(__name__)
 
+# System UUID for AI moderation approvals
+AI_SYSTEM_UUID = UUID("00000000-0000-0000-0000-000000000001")
+
 
 class TopicModerationWorker(BaseWorker, QueueWorkerMixin):
     """Worker for processing topic creation queue."""
@@ -47,10 +50,16 @@ class TopicModerationWorker(BaseWorker, QueueWorkerMixin):
             success = await self._ai_topic_moderation(topic)
 
             if success:
-                # TODO(josh): Need to handle AI approval without moderator_pk
-                # For now, skip approval until repository method is updated
-                logger.info(f"Topic {topic_id} would be approved by AI moderation")
-                return True
+                # Approve the topic with AI system as the approver
+                approved_topic = await topic_repo.approve_topic(
+                    topic_id,
+                    AI_SYSTEM_UUID,  # Use AI system UUID for AI approvals
+                )
+                if approved_topic:
+                    logger.info(f"Topic {topic_id} approved by AI moderation")
+                    return True
+                logger.error(f"Failed to approve topic {topic_id}")
+                return False
             # Reject the topic
             rejected_topic = await topic_repo.reject_topic(topic_id)
             if rejected_topic:

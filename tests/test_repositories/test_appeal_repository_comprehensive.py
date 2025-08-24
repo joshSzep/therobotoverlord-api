@@ -413,6 +413,8 @@ class TestAppealRepository:
             "total_sustained": 10,
             "total_denied": 15,
             "total_withdrawn": 1,
+            "total_count": 33,
+            "total_today": 3,
             "avg_review_hours": 24.5,
         }
 

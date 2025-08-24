@@ -43,6 +43,10 @@ class WebSocketEventType(str, Enum):
     USER_ONLINE = "user_online"
     USER_OFFLINE = "user_offline"
 
+    # Appeal events
+    NEW_APPEAL = "new_appeal"
+    APPEAL_OUTCOME = "appeal_outcome"
+
 
 class WebSocketMessage(BaseModel):
     """Base WebSocket message structure."""

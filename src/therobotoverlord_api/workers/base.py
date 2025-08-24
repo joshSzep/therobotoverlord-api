@@ -98,19 +98,30 @@ class QueueWorkerMixin:
         worker_id: str | None = None,
     ) -> None:
         """Update queue item status."""
-        # This method should be implemented by classes that use this mixin
-        # For now, we'll provide a basic implementation
-        logger.warning(f"update_queue_status not implemented for {queue_table}")
-        raise NotImplementedError("update_queue_status must be implemented by subclass")
+        try:
+            async with get_db_connection() as connection:
+                await self._update_queue_status_with_connection(
+                    connection, queue_table, queue_id, status, worker_id
+                )
+        except Exception:
+            logger.exception(
+                f"Failed to update queue status for {queue_table} item {queue_id}"
+            )
 
     async def get_queue_item(
         self, queue_table: str, queue_id: UUID
     ) -> dict[str, Any] | None:
         """Get queue item by ID."""
-        # This method should be implemented by classes that use this mixin
-        # For now, we'll provide a basic implementation
-        logger.warning(f"get_queue_item not implemented for {queue_table}")
-        raise NotImplementedError("get_queue_item must be implemented by subclass")
+        try:
+            async with get_db_connection() as connection:
+                query = f"SELECT * FROM {queue_table} WHERE pk = $1"  # nosec B608
+                record = await connection.fetchrow(query, queue_id)
+                return dict(record) if record else None
+        except Exception:
+            logger.exception(
+                f"Failed to get queue item from {queue_table} with id {queue_id}"
+            )
+            return None
 
     async def process_queue_item(
         self,
@@ -119,38 +130,105 @@ class QueueWorkerMixin:
         queue_id: UUID,
         content_id: UUID,
         processor_func: Callable[..., Any],
+        max_retries: int = 3,
     ) -> bool:
-        """Generic queue item processing workflow."""
-        db = ctx.get("db")
-        if not db:
-            logger.error("Database connection not available in context")
-            return False
-
+        """Generic queue item processing workflow with retry logic."""
         try:
-            # Update status to processing
-            await self.update_queue_status(
-                queue_table, queue_id, "processing", ctx.get("worker_id")
-            )
+            async with get_db_connection() as connection:
+                # Get current retry count
+                retry_count = await self._get_retry_count(
+                    connection, queue_table, queue_id
+                )
 
-            # Process the content
-            success = await processor_func(ctx, content_id)
+                if retry_count >= max_retries:
+                    logger.error(
+                        f"Max retries ({max_retries}) exceeded for {queue_table} item {queue_id}"
+                    )
+                    await self._update_queue_status_with_connection(
+                        connection, queue_table, queue_id, "failed"
+                    )
+                    return False
 
-            # Update final status
-            final_status = "completed" if success else "pending"
-            await self.update_queue_status(queue_table, queue_id, final_status)
+                # Update status to processing
+                await self._update_queue_status_with_connection(
+                    connection,
+                    queue_table,
+                    queue_id,
+                    "processing",
+                    ctx.get("worker_id"),
+                )
 
-            if success:
-                logger.info(f"Successfully processed {queue_table} item {queue_id}")
-            else:
-                logger.warning(f"Failed to process {queue_table} item {queue_id}")
+                # Process the content
+                success = await processor_func(ctx, content_id)
 
-            return success
+                if success:
+                    # Update final status to completed
+                    await self._update_queue_status_with_connection(
+                        connection, queue_table, queue_id, "completed"
+                    )
+                    logger.info(f"Successfully processed {queue_table} item {queue_id}")
+                    return True
+
+                # Increment retry count and reset to pending
+                await self._increment_retry_count(connection, queue_table, queue_id)
+                await self._update_queue_status_with_connection(
+                    connection, queue_table, queue_id, "pending"
+                )
+                logger.warning(
+                    f"Failed to process {queue_table} item {queue_id}, retry {retry_count + 1}/{max_retries}"
+                )
+                return False
 
         except Exception as e:
             logger.exception(f"Error processing {queue_table} item {queue_id}")
-            # Reset to pending for retry
-            await self.update_queue_status(queue_table, queue_id, "pending")
+            try:
+                async with get_db_connection() as connection:
+                    await self._increment_retry_count(connection, queue_table, queue_id)
+                    await self._update_queue_status_with_connection(
+                        connection, queue_table, queue_id, "pending"
+                    )
+            except Exception:
+                logger.exception(
+                    f"Failed to update retry count for {queue_table} item {queue_id}"
+                )
             return False
+
+    async def _get_retry_count(
+        self, connection, queue_table: str, queue_id: UUID
+    ) -> int:
+        """Get current retry count for a queue item."""
+        query = f"SELECT COALESCE(retry_count, 0) FROM {queue_table} WHERE pk = $1"  # nosec B608
+        result = await connection.fetchval(query, queue_id)
+        return result or 0
+
+    async def _increment_retry_count(
+        self, connection, queue_table: str, queue_id: UUID
+    ) -> None:
+        """Increment retry count for a queue item."""
+        query = f"UPDATE {queue_table} SET retry_count = COALESCE(retry_count, 0) + 1 WHERE pk = $1"  # nosec B608
+        await connection.execute(query, queue_id)
+
+    async def _update_queue_status_with_connection(
+        self,
+        connection,
+        queue_table: str,
+        queue_id: UUID,
+        status: str,
+        worker_id: str | None = None,
+    ) -> None:
+        """Update queue item status with provided connection."""
+        update_fields = {"status": status}
+        if worker_id:
+            update_fields["worker_id"] = worker_id
+
+        # Build dynamic query
+        query = f"""  # nosec B608
+            UPDATE {queue_table}
+            SET {", ".join(f"{k} = ${i + 2}" for i, k in enumerate(update_fields.keys()))}
+            WHERE pk = $1
+        """
+
+        await connection.execute(query, queue_id, *update_fields.values())
 
 
 def create_worker_class(

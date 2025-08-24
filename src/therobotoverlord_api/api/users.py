@@ -10,7 +10,8 @@ from fastapi import Query
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
-from therobotoverlord_api.database.models.badge import UserBadge
+from therobotoverlord_api.database.models.badge import UserBadgeSummary
+from therobotoverlord_api.database.models.badge import UserBadgeWithDetails
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.post import Post
 from therobotoverlord_api.database.models.user import User
@@ -111,9 +112,24 @@ async def update_user_profile(
 async def get_user_badges(
     user_id: UUID,
     user_service: Annotated[UserService, Depends(get_user_service)],
-) -> list[UserBadge]:
-    """Get user's badges."""
+) -> list[UserBadgeWithDetails]:
+    """Get user's badges with details."""
     return await user_service.get_user_badges(user_id)
+
+
+@router.get("/{user_id}/badge-summary")
+async def get_user_badge_summary(
+    user_id: UUID,
+    user_service: Annotated[UserService, Depends(get_user_service)],
+) -> UserBadgeSummary:
+    """Get user's badge summary for profile display."""
+    summary = await user_service.get_user_badge_summary(user_id)
+    if not summary:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return summary
 
 
 @router.get("/{user_id}/activity")
@@ -125,6 +141,28 @@ async def get_user_activity(
 ) -> dict:
     """Get user's activity feed."""
     return await user_service.get_user_activity(user_id, limit, offset)
+
+
+@router.get("/leaderboard")
+async def get_leaderboard(
+    user_service: Annotated[UserService, Depends(get_user_service)],
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    badge_type: Annotated[str | None, Query()] = None,
+) -> list[dict]:
+    """Get user leaderboard based on badges and loyalty scores."""
+    return await user_service.get_leaderboard(limit, offset, badge_type)
+
+
+@router.get("/leaderboard/badge/{badge_id}")
+async def get_badge_leaderboard(
+    badge_id: UUID,
+    user_service: Annotated[UserService, Depends(get_user_service)],
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[dict]:
+    """Get leaderboard for users who have earned a specific badge."""
+    return await user_service.get_badge_leaderboard(badge_id, limit, offset)
 
 
 @router.delete("/{user_id}")

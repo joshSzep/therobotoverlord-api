@@ -45,9 +45,27 @@ def mock_badge_repo():
 
 
 @pytest.fixture
-def user_service(mock_user_repo, mock_post_repo, mock_topic_repo, mock_badge_repo):
+def mock_user_badge_repo():
+    """Create a mock user badge repository."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def user_service(
+    mock_user_repo,
+    mock_post_repo,
+    mock_topic_repo,
+    mock_badge_repo,
+    mock_user_badge_repo,
+):
     """Create UserService with mocked dependencies."""
-    return UserService(mock_user_repo, mock_post_repo, mock_topic_repo, mock_badge_repo)
+    return UserService(
+        mock_user_repo,
+        mock_post_repo,
+        mock_topic_repo,
+        mock_badge_repo,
+        mock_user_badge_repo,
+    )
 
 
 @pytest.fixture
@@ -259,7 +277,7 @@ class TestGetUserBadges:
 
     @pytest.mark.asyncio
     async def test_get_user_badges_success(
-        self, user_service, mock_badge_repo, sample_user
+        self, user_service, mock_user_badge_repo, sample_user
     ):
         """Test successful user badges retrieval."""
         user_badge = UserBadge(
@@ -271,14 +289,14 @@ class TestGetUserBadges:
             created_at=sample_user.created_at,
             updated_at=sample_user.updated_at,
         )
-        mock_badge_repo.get_user_badges.return_value = [user_badge]
+        mock_user_badge_repo.get_user_badges.return_value = [user_badge]
 
         result = await user_service.get_user_badges(sample_user.pk)
 
         assert len(result) == 1
         assert result[0].user_pk == sample_user.pk
 
-        mock_badge_repo.get_user_badges.assert_called_once_with(sample_user.pk)
+        mock_user_badge_repo.get_user_badges.assert_called_once_with(sample_user.pk)
 
 
 class TestGetUserActivity:

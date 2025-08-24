@@ -42,6 +42,7 @@ class DashboardService:
     def __init__(self):
         # Initialize repositories first
         from therobotoverlord_api.database.repositories.badge import BadgeRepository
+        from therobotoverlord_api.database.repositories.badge import UserBadgeRepository
         from therobotoverlord_api.database.repositories.post import PostRepository
         from therobotoverlord_api.database.repositories.sanction import (
             SanctionRepository,
@@ -53,10 +54,13 @@ class DashboardService:
         post_repo = PostRepository()
         topic_repo = TopicRepository()
         badge_repo = BadgeRepository()
+        user_badge_repo = UserBadgeRepository()
         sanction_repo = SanctionRepository()
 
         # Use existing services with required dependencies
-        self.user_service = UserService(user_repo, post_repo, topic_repo, badge_repo)
+        self.user_service = UserService(
+            user_repo, post_repo, topic_repo, badge_repo, user_badge_repo
+        )
         self.sanction_service = SanctionService(sanction_repo, user_repo)
         self.flag_service = FlagService()
         self.appeal_service = AppealService()

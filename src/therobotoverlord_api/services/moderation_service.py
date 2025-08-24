@@ -5,6 +5,7 @@ import logging
 from uuid import UUID
 
 from therobotoverlord_api.database.connection import db
+from therobotoverlord_api.services.badge_service import BadgeService
 from therobotoverlord_api.websocket.manager import websocket_manager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class ModerationService:
 
     def __init__(self):
         self.db = db
+        self.badge_service = BadgeService()
 
     async def process_content_decision(
         self,
@@ -46,6 +48,11 @@ class ModerationService:
             # Update loyalty score if applicable
             if loyalty_score_change:
                 await self._update_loyalty_score(user_id, loyalty_score_change)
+
+            # Process badge awards based on moderation outcome
+            await self._process_badge_awards(
+                user_id, content_type, decision, content_id, feedback
+            )
 
             # Broadcast moderation result via WebSocket
             event_broadcaster = get_event_broadcaster(websocket_manager)
@@ -114,6 +121,16 @@ class ModerationService:
                 new_score=new_score,
                 reason="Content moderation result",
             )
+
+            # Check for loyalty-based badge eligibility after score change
+            try:
+                await self.badge_service.auto_award_eligible_badges(
+                    user_id, "loyalty_score_change", websocket_manager
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to check badge eligibility after loyalty score change: {e}"
+                )
 
     async def _update_queue_positions(
         self, content_type: str, user_id: UUID, websocket_manager=None
@@ -221,6 +238,11 @@ class ModerationService:
                 except Exception as e:
                     logger.warning(f"Failed to broadcast content approval: {e}")
 
+            # Process badge awards for approved content
+            await self._process_badge_awards(
+                user_id, content_type, "approved", content_id, moderator_notes
+            )
+
             # Update queue positions for remaining items
             await self._update_queue_positions(content_type, user_id, websocket_manager)
 
@@ -273,6 +295,11 @@ class ModerationService:
                 except Exception as e:
                     logger.warning(f"Failed to broadcast content rejection: {e}")
 
+            # Process badge awards for rejected content
+            await self._process_badge_awards(
+                user_id, content_type, "rejected", content_id, moderator_notes
+            )
+
             # Update queue position for remaining items
             await self._update_queue_positions(content_type, user_id)
 
@@ -282,3 +309,44 @@ class ModerationService:
         except Exception as e:
             logger.error(f"Error rejecting content: {e}")
             raise
+
+    async def _process_badge_awards(
+        self,
+        user_id: UUID,
+        content_type: str,
+        outcome: str,
+        content_id: UUID,
+        feedback: str | None = None,
+    ) -> None:
+        """Process badge awards based on moderation outcome."""
+        try:
+            # Extract rejection reason from feedback if applicable
+            rejection_reason = None
+            if outcome == "rejected" and feedback:
+                # Map common feedback patterns to rejection reasons
+                feedback_lower = feedback.lower()
+                if "strawman" in feedback_lower or "straw man" in feedback_lower:
+                    rejection_reason = "strawman_fallacy"
+                elif "ad hominem" in feedback_lower:
+                    rejection_reason = "ad_hominem"
+                elif "logic" in feedback_lower or "reasoning" in feedback_lower:
+                    rejection_reason = "poor_logic"
+
+            # Award badges based on moderation outcome
+            awarded_badges = await self.badge_service.process_moderation_outcome(
+                user_id=user_id,
+                content_type=content_type,
+                outcome=outcome,
+                content_id=content_id,
+                rejection_reason=rejection_reason,
+                websocket_manager=websocket_manager,
+            )
+
+            if awarded_badges:
+                logger.info(
+                    f"Awarded {len(awarded_badges)} badges to user {user_id} "
+                    f"for {outcome} {content_type}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error processing badge awards: {e}")

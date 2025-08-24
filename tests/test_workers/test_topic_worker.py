@@ -63,18 +63,42 @@ class TestTopicModerationWorker:
         worker = TopicModerationWorker()
         worker.db = mock_connection
 
-        # Mock TopicRepository
-        with patch(
-            "therobotoverlord_api.workers.topic_worker.TopicRepository"
-        ) as mock_repo_class:
+        # Mock get_db_connection to avoid database initialization issues
+        class MockDBConnection:
+            async def __aenter__(self):
+                # Mock the database connection with proper return values
+                mock_conn = AsyncMock()
+                mock_conn.fetchval.return_value = 0  # retry_count = 0
+                mock_conn.execute.return_value = None  # for status updates
+                return mock_conn
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        def mock_get_db_connection():
+            return MockDBConnection()
+
+        # Mock TopicRepository and AI moderation
+        with (
+            patch(
+                "therobotoverlord_api.workers.topic_worker.TopicRepository"
+            ) as mock_repo_class,
+            patch(
+                "therobotoverlord_api.workers.base.get_db_connection",
+                mock_get_db_connection,
+            ),
+            patch.object(worker, "_ai_topic_moderation", return_value=True) as mock_ai,
+        ):
             mock_repo = AsyncMock()
             mock_topic = MagicMock()
+            mock_topic.pk = sample_topic_data["pk"]
+            mock_topic.author_pk = sample_topic_data["author_pk"]
             mock_topic.title = "Good Topic Title"
             mock_topic.description = (
                 "This is a good topic description with sufficient content"
             )
             mock_repo.get_by_pk.return_value = mock_topic
-            mock_repo.approve_topic.return_value = True
+            mock_repo.approve_topic.return_value = mock_topic
             mock_repo_class.return_value = mock_repo
 
             ctx = {"db": mock_connection}
@@ -85,8 +109,11 @@ class TestTopicModerationWorker:
 
             assert result is True
             mock_repo.get_by_pk.assert_called_once_with(topic_id)
-            # approve_topic is not called in current implementation due to moderator_pk requirement
-            mock_repo.approve_topic.assert_not_called()
+            mock_ai.assert_called_once_with(mock_topic)
+            # AI moderation should use AI_SYSTEM_UUID, not author_pk
+            from therobotoverlord_api.workers.topic_worker import AI_SYSTEM_UUID
+
+            mock_repo.approve_topic.assert_called_once_with(topic_id, AI_SYSTEM_UUID)
 
     @pytest.mark.asyncio
     async def test_process_topic_not_found(self, mock_connection):
@@ -94,10 +121,31 @@ class TestTopicModerationWorker:
         worker = TopicModerationWorker()
         worker.db = mock_connection
 
+        # Mock get_db_connection to avoid database initialization issues
+        class MockDBConnection:
+            async def __aenter__(self):
+                # Mock the database connection with proper return values
+                mock_conn = AsyncMock()
+                mock_conn.fetchval.return_value = 0  # retry_count = 0
+                mock_conn.execute.return_value = None  # for status updates
+                return mock_conn
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        def mock_get_db_connection():
+            return MockDBConnection()
+
         # Mock TopicRepository
-        with patch(
-            "therobotoverlord_api.workers.topic_worker.TopicRepository"
-        ) as mock_repo_class:
+        with (
+            patch(
+                "therobotoverlord_api.workers.topic_worker.TopicRepository"
+            ) as mock_repo_class,
+            patch(
+                "therobotoverlord_api.workers.base.get_db_connection",
+                mock_get_db_connection,
+            ),
+        ):
             mock_repo = AsyncMock()
             mock_repo.get_by_pk.return_value = None
             mock_repo_class.return_value = mock_repo
@@ -117,17 +165,38 @@ class TestTopicModerationWorker:
         worker = TopicModerationWorker()
         worker.db = mock_connection
 
+        # Mock get_db_connection to avoid database initialization issues
+        class MockDBConnection:
+            async def __aenter__(self):
+                # Mock the database connection with proper return values
+                mock_conn = AsyncMock()
+                mock_conn.fetchval.return_value = 0  # retry_count = 0
+                mock_conn.execute.return_value = None  # for status updates
+                return mock_conn
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        def mock_get_db_connection():
+            return MockDBConnection()
+
         # Mock TopicRepository
-        with patch(
-            "therobotoverlord_api.workers.topic_worker.TopicRepository"
-        ) as mock_repo_class:
+        with (
+            patch(
+                "therobotoverlord_api.workers.topic_worker.TopicRepository"
+            ) as mock_repo_class,
+            patch(
+                "therobotoverlord_api.workers.base.get_db_connection",
+                mock_get_db_connection,
+            ),
+        ):
             mock_repo = AsyncMock()
             mock_topic = MagicMock()
             mock_topic.title = "spam"  # Should be rejected
             mock_topic.description = "spam content"
             mock_topic.pk = sample_topic_data["pk"]
             mock_repo.get_by_pk.return_value = mock_topic
-            mock_repo.reject_topic.return_value = True
+            mock_repo.reject_topic.return_value = mock_topic
             mock_repo_class.return_value = mock_repo
 
             # Mock AI moderation service to return rejection
@@ -142,7 +211,7 @@ class TestTopicModerationWorker:
 
                 assert result is True
                 mock_repo.get_by_pk.assert_called_once_with(topic_id)
-                mock_repo.reject_topic.assert_called_once()
+                mock_repo.reject_topic.assert_called_once_with(topic_id)
 
     @pytest.mark.asyncio
     async def test_process_database_error(self, mock_connection, sample_topic_data):
