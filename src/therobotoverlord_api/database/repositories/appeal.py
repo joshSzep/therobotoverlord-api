@@ -315,8 +315,8 @@ class AppealRepository(BaseRepository[Appeal]):
             SELECT
                 u.username,
                 COUNT(*) as reviews_completed,
-                COUNT(*) FILTER (WHERE a.status = 'sustained') as sustained_count,
-                COUNT(*) FILTER (WHERE a.status = 'denied') as denied_count
+                COUNT(*) FILTER (WHERE a.status = 'sustained') as total_sustained,
+                COUNT(*) FILTER (WHERE a.status = 'denied') as total_denied
             FROM appeals a
             JOIN users u ON a.reviewed_by = u.pk
             WHERE a.reviewed_at > NOW() - INTERVAL '30 days'
@@ -348,8 +348,8 @@ class AppealRepository(BaseRepository[Appeal]):
                 {
                     "username": record["username"],
                     "reviews_completed": record["reviews_completed"],
-                    "sustained_count": record["sustained_count"],
-                    "denied_count": record["denied_count"],
+                    "sustained_count": record["total_sustained"],
+                    "denied_count": record["total_denied"],
                 }
                 for record in reviewer_records
             ]
@@ -377,8 +377,6 @@ class AppealRepository(BaseRepository[Appeal]):
                 total_withdrawn=total_withdrawn,
                 total_count=total_count,
                 total_today=total_today,
-                sustained_count=total_sustained,  # Alias
-                denied_count=total_denied,  # Alias
                 average_review_time_hours=stats_record["avg_review_hours"]
                 if stats_record
                 else None,

@@ -69,7 +69,7 @@ async def get_appeal_trends(
     return {
         "period_days": days,
         "total_appeals": stats.total_count,
-        "approval_rate": stats.sustained_count / max(stats.total_count, 1) * 100,
+        "approval_rate": stats.total_sustained / max(stats.total_count, 1) * 100,
         "average_resolution_time": "2.5 hours",  # Would calculate from DB
         "top_violation_types": [
             {"type": "harassment", "count": 45},
@@ -77,7 +77,7 @@ async def get_appeal_trends(
             {"type": "misinformation", "count": 28},
         ],
         "moderator_performance": {
-            "total_reviewed": stats.sustained_count + stats.denied_count,
+            "total_reviewed": stats.total_sustained + stats.total_denied,
             "accuracy_score": 92.5,  # Would calculate based on overturned decisions
         },
     }

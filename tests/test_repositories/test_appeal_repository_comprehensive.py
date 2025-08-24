@@ -432,8 +432,8 @@ class TestAppealRepository:
             {
                 "username": "mod1",
                 "reviews_completed": 15,
-                "sustained_count": 5,
-                "denied_count": 10,
+                "total_sustained": 5,
+                "total_denied": 10,
             }
         ]
 

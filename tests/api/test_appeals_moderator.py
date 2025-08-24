@@ -417,8 +417,6 @@ class TestAppealsModeratorAPI:
             total_withdrawn=3,
             total_today=8,
             total_count=53,
-            sustained_count=15,
-            denied_count=20,
             average_review_time_hours=24.5,
             appeals_by_type={"post_rejection": 25, "topic_rejection": 15},
             top_appellants=[{"username": "user1", "appeal_count": 5}],

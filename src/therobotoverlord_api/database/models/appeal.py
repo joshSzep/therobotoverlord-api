@@ -146,8 +146,6 @@ class AppealStats(BaseModel):
     total_withdrawn: int
     total_count: int  # Total appeals across all statuses
     total_today: int  # Appeals submitted today
-    sustained_count: int  # Alias for total_sustained
-    denied_count: int  # Alias for total_denied
     average_review_time_hours: float | None
     appeals_by_type: dict[str, int]
     top_appellants: list[dict[str, str | int]]
