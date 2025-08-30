@@ -509,26 +509,30 @@ class QueueService:
 
             # Broadcast queue update via WebSocket
             if result and websocket_manager:
-                event_broadcaster = get_event_broadcaster(websocket_manager)
+                try:
+                    event_broadcaster = get_event_broadcaster(websocket_manager)
 
-                # Use queue_repo if available (for testing), otherwise use mock values
-                if hasattr(self, "queue_repo"):
-                    new_position = await self.queue_repo.get_user_position(user_id)
-                    total_queue_size = await self.queue_repo.get_queue_size()
-                    old_position = None  # New item, so old position is None
-                else:
-                    # For production, use mock values until proper implementation
-                    old_position = None
-                    new_position = 1
-                    total_queue_size = 5
+                    # Use queue_repo if available (for testing), otherwise use mock values
+                    if hasattr(self, "queue_repo"):
+                        new_position = await self.queue_repo.get_user_position(user_id)
+                        total_queue_size = await self.queue_repo.get_queue_size()
+                        old_position = None  # New item, so old position is None
+                    else:
+                        # For production, use mock values until proper implementation
+                        old_position = None
+                        new_position = 1
+                        total_queue_size = 5
 
-                await event_broadcaster.broadcast_queue_position_update(
-                    user_id=user_id,
-                    queue_type=queue_type,
-                    old_position=old_position,
-                    new_position=new_position,
-                    total_queue_size=total_queue_size,
-                )
+                    await event_broadcaster.broadcast_queue_position_update(
+                        user_id=user_id,
+                        queue_type=queue_type,
+                        old_position=old_position,
+                        new_position=new_position,
+                        total_queue_size=total_queue_size,
+                    )
+                except Exception as websocket_error:
+                    logger.warning(f"WebSocket broadcast failed: {websocket_error}")
+                    # Continue execution - WebSocket errors shouldn't break queue operations
 
             return (
                 {"success": True, "queue_id": result} if result else {"success": False}

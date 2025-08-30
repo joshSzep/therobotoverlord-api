@@ -444,12 +444,18 @@ class TestValidation:
 class TestBusinessLogic:
     """Test cases for business logic validation."""
 
+    @patch("therobotoverlord_api.services.leaderboard_service.get_redis_client")
+    @patch("therobotoverlord_api.workers.redis_connection.get_redis_client")
+    @patch("therobotoverlord_api.api.topics.get_queue_service")
     @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
     @patch("therobotoverlord_api.api.topics.TopicRepository")
     def test_moderator_bypass_loyalty_score(
         self,
         mock_repo_class,
         mock_loyalty_service,
+        mock_queue_service,
+        mock_redis_client,
+        mock_leaderboard_redis,
         client,
         mock_moderator,
         sample_topic,
@@ -460,9 +466,19 @@ class TestBusinessLogic:
         mock_repo.create.return_value = sample_topic
         mock_repo_class.return_value = mock_repo
 
+        # Mock Redis clients
+        mock_redis = AsyncMock()
+        mock_redis_client.return_value = mock_redis
+        mock_leaderboard_redis.return_value = mock_redis
+
         # Mock loyalty service
         mock_loyalty_service_instance = AsyncMock()
         mock_loyalty_service.return_value = mock_loyalty_service_instance
+
+        # Mock queue service
+        mock_queue_service_instance = AsyncMock()
+        mock_queue_service_instance.add_topic_to_queue.return_value = AsyncMock()
+        mock_queue_service.return_value = mock_queue_service_instance
 
         topic_data = {
             "title": "Moderator Topic",

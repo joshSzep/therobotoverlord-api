@@ -42,14 +42,18 @@ class TestLeaderboardIntegration:
         return service
 
     @pytest.mark.asyncio
+    @patch("therobotoverlord_api.services.leaderboard_service.get_redis_client")
     async def test_pagination_consistency_across_pages(
         self,
+        mock_get_redis_client,
         service,
         mock_get_db_connection,
         sample_db_leaderboard_rows,
         mock_redis_client,
     ):
         """Test that pagination maintains consistency across multiple pages."""
+        # Setup Redis mock
+        mock_get_redis_client.return_value = mock_redis_client
         # Setup cache miss to force repository calls
         mock_redis_client.get.return_value = None
 

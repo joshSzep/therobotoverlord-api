@@ -28,7 +28,6 @@ from therobotoverlord_api.services.loyalty_score_service import (
 )
 
 
-@pytest.mark.asyncio
 class TestLoyaltyScoreService:
     """Test cases for LoyaltyScoreService."""
 
@@ -166,6 +165,7 @@ class TestLoyaltyScoreService:
         assert service._appeal_bonus == 2
         assert service._appeal_penalty == 1
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_loyalty_profile_cache_hit(
         self,
@@ -189,6 +189,7 @@ class TestLoyaltyScoreService:
             f"loyalty_profile:{sample_user_pk}"
         )
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_loyalty_profile_cache_miss(
         self,
@@ -214,6 +215,7 @@ class TestLoyaltyScoreService:
         )
         mock_redis_client.setex.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_loyalty_profile_cache_invalid_json(
         self,
@@ -237,6 +239,7 @@ class TestLoyaltyScoreService:
             sample_user_pk
         )
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_score_breakdown_cache_hit(
         self,
@@ -260,6 +263,7 @@ class TestLoyaltyScoreService:
             f"score_breakdown:{sample_user_pk}"
         )
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_score_breakdown_cache_miss(
         self,
@@ -283,6 +287,7 @@ class TestLoyaltyScoreService:
         service.repository.get_score_breakdown.assert_called_once_with(sample_user_pk)
         mock_redis_client.setex.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_user_score_breakdown_cache_invalid_json(
         self,
@@ -304,6 +309,7 @@ class TestLoyaltyScoreService:
         assert isinstance(result, LoyaltyScoreBreakdown)
         service.repository.get_score_breakdown.assert_called_once_with(sample_user_pk)
 
+    @pytest.mark.asyncio
     async def test_get_user_events(self, service, sample_user_pk):
         """Test getting user events."""
         filters = LoyaltyEventFilters(event_type=ModerationEventType.POST_MODERATION)
@@ -324,6 +330,7 @@ class TestLoyaltyScoreService:
             sample_user_pk, filters, 1, 50
         )
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_system_stats_cache_hit(
         self, mock_get_redis, service, sample_system_stats, mock_redis_client
@@ -340,6 +347,7 @@ class TestLoyaltyScoreService:
         assert result.total_users == 1000
         mock_redis_client.get.assert_called_once_with("loyalty_system_stats")
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_system_stats_cache_miss(
         self, mock_get_redis, service, sample_system_stats, mock_redis_client
@@ -358,6 +366,7 @@ class TestLoyaltyScoreService:
         service.repository.get_system_stats.assert_called_once()
         mock_redis_client.setex.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_get_system_stats_cache_invalid_json(
         self, mock_get_redis, service, sample_system_stats, mock_redis_client
@@ -374,6 +383,7 @@ class TestLoyaltyScoreService:
         assert isinstance(result, LoyaltyScoreStats)
         service.repository.get_system_stats.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_record_moderation_event(
         self,
@@ -408,6 +418,7 @@ class TestLoyaltyScoreService:
         # Verify cache invalidation
         assert mock_redis_client.delete.call_count >= 2  # User cache + system stats
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_apply_manual_adjustment(
         self,
@@ -444,6 +455,7 @@ class TestLoyaltyScoreService:
         # Verify cache invalidation
         assert mock_redis_client.delete.call_count >= 2
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_recalculate_user_score(
         self, mock_get_redis, service, sample_user_pk, mock_redis_client
@@ -461,6 +473,7 @@ class TestLoyaltyScoreService:
         # Verify cache invalidation
         assert mock_redis_client.delete.call_count >= 3
 
+    @pytest.mark.asyncio
     async def test_get_score_thresholds(self, service, sample_system_stats):
         """Test getting score thresholds."""
         service.get_system_stats = AsyncMock(return_value=sample_system_stats)
@@ -473,6 +486,7 @@ class TestLoyaltyScoreService:
         assert result["priority_moderation"] == 500
         assert result["extended_appeals"] == 1000
 
+    @pytest.mark.asyncio
     async def test_get_users_by_score_range(self, service, sample_user_pk):
         """Test getting users by score range."""
         mock_profiles = [
@@ -516,6 +530,7 @@ class TestLoyaltyScoreService:
             50, 150, 100
         )
 
+    @pytest.mark.asyncio
     async def test_get_recent_events(self, service, sample_moderation_event):
         """Test getting recent events."""
         filters = LoyaltyEventFilters(event_type=ModerationEventType.POST_MODERATION)
@@ -607,6 +622,7 @@ class TestLoyaltyScoreService:
         )
         assert delta == 0
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.services.loyalty_score_service.get_redis_client")
     async def test_invalidate_user_cache(
         self, mock_get_redis, service, sample_user_pk, mock_redis_client
@@ -626,10 +642,10 @@ class TestLoyaltyScoreService:
             mock_redis_client.delete.assert_any_call(key)
 
 
-@pytest.mark.asyncio
 class TestGetLoyaltyScoreService:
     """Test cases for get_loyalty_score_service function."""
 
+    @pytest.mark.asyncio
     async def test_get_loyalty_score_service_singleton(self):
         """Test that get_loyalty_score_service returns the same instance."""
         # Reset the global variable
@@ -643,6 +659,7 @@ class TestGetLoyaltyScoreService:
         assert service1 is service2
         assert isinstance(service1, LoyaltyScoreService)
 
+    @pytest.mark.asyncio
     async def test_get_loyalty_score_service_creates_instance(self):
         """Test that get_loyalty_score_service creates a new instance when needed."""
         # Reset the global variable

@@ -48,9 +48,6 @@ class MockAsyncConnection:
         return self._transaction
 
 
-pytestmark = pytest.mark.asyncio
-
-
 @pytest.fixture
 def repository():
     """Create a LoyaltyScoreRepository instance."""
@@ -134,6 +131,7 @@ class TestLoyaltyScoreRepository:
         assert result.previous_score == 10
         assert result.new_score == 15
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_record_moderation_event_success(
         self,
@@ -181,6 +179,7 @@ class TestLoyaltyScoreRepository:
         assert result.previous_score == 10
         assert result.new_score == 15
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_record_moderation_event_user_not_found(
         self, mock_get_db_connection, repository, sample_user_pk, sample_content_pk
@@ -205,6 +204,7 @@ class TestLoyaltyScoreRepository:
                 score_delta=5,
             )
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_user_loyalty_profile_success(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -266,6 +266,7 @@ class TestLoyaltyScoreRepository:
         assert result.rank == 10
         assert result.can_create_topics is True
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_user_loyalty_profile_user_not_found(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -282,6 +283,7 @@ class TestLoyaltyScoreRepository:
         with pytest.raises(ValueError, match=f"User {sample_user_pk} not found"):
             await repository.get_user_loyalty_profile(sample_user_pk)
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_score_breakdown_success(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -324,6 +326,7 @@ class TestLoyaltyScoreRepository:
         assert result.appeal_adjustments == 5
         assert result.manual_adjustments == 7
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_score_breakdown_user_not_found(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -340,6 +343,7 @@ class TestLoyaltyScoreRepository:
         with pytest.raises(ValueError, match=f"User {sample_user_pk} not found"):
             await repository.get_score_breakdown(sample_user_pk)
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_user_events_success(
         self, mock_get_db_connection, repository, sample_user_pk, mock_db_record
@@ -371,6 +375,7 @@ class TestLoyaltyScoreRepository:
         assert len(result.events) == 1
         assert result.has_next is False
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_user_events_with_filters(
         self, mock_get_db_connection, repository, sample_user_pk, mock_db_record
@@ -402,6 +407,7 @@ class TestLoyaltyScoreRepository:
         assert isinstance(result, LoyaltyEventResponse)
         assert result.filters_applied == filters
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_user_score_history_success(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -434,6 +440,7 @@ class TestLoyaltyScoreRepository:
         assert result[0].user_pk == sample_user_pk
         assert result[0].score == 50
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_system_stats_success(self, mock_get_db_connection, repository):
         """Test successful system stats retrieval."""
@@ -479,6 +486,7 @@ class TestLoyaltyScoreRepository:
         assert result.total_events_processed == 500
         assert len(result.score_distribution) == 6
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_system_stats_no_data(self, mock_get_db_connection, repository):
         """Test system stats retrieval when no data is available."""
@@ -493,6 +501,7 @@ class TestLoyaltyScoreRepository:
         with pytest.raises(ValueError, match="Failed to retrieve system statistics"):
             await repository.get_system_stats()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_apply_manual_adjustment_success(
         self, mock_get_db_connection, repository, sample_user_pk, sample_moderator_pk
@@ -528,6 +537,7 @@ class TestLoyaltyScoreRepository:
         assert result == expected_event
         repository.record_moderation_event.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_recalculate_user_score_success(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -547,6 +557,7 @@ class TestLoyaltyScoreRepository:
         assert result == 75
         assert mock_conn.execute.call_count == 1  # Update user score
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_recalculate_user_score_no_data(
         self, mock_get_db_connection, repository, sample_user_pk
@@ -565,6 +576,7 @@ class TestLoyaltyScoreRepository:
         ):
             await repository.recalculate_user_score(sample_user_pk)
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_users_by_score_range_success(
         self, mock_get_db_connection, repository
@@ -622,6 +634,7 @@ class TestLoyaltyScoreRepository:
         assert result[0].username == "testuser"
         assert result[0].current_score == 50
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_recent_events_success(
         self, mock_get_db_connection, repository, mock_db_record
@@ -645,6 +658,7 @@ class TestLoyaltyScoreRepository:
         assert len(result) == 1
         assert isinstance(result[0], ModerationEvent)
 
+    @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.loyalty_score.get_db_connection")
     async def test_get_recent_events_with_filters(
         self, mock_get_db_connection, repository, mock_db_record
@@ -673,6 +687,7 @@ class TestLoyaltyScoreRepository:
         assert len(result) == 1
         assert isinstance(result[0], ModerationEvent)
 
+    @pytest.mark.asyncio
     async def test_get_score_thresholds(self, repository):
         """Test score thresholds retrieval."""
         # Mock get_system_stats method

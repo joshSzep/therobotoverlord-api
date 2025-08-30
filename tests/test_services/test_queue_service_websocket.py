@@ -211,8 +211,9 @@ class TestQueueServiceWebSocket:
             )
 
     @pytest.mark.asyncio
+    @patch("therobotoverlord_api.services.queue_service.get_event_broadcaster")
     async def test_queue_operations_without_websocket_manager(
-        self, queue_service, mock_queue_repo
+        self, mock_get_broadcaster, queue_service, mock_queue_repo
     ):
         """Test queue operations work without WebSocket manager."""
         user_id = uuid4()
@@ -224,14 +225,21 @@ class TestQueueServiceWebSocket:
         mock_queue_repo.get_user_position.return_value = 1
         mock_queue_repo.get_queue_size.return_value = 5
 
-        # Should not raise exception when websocket_manager is None
-        await queue_service.add_to_queue(
-            user_id=user_id,
-            content_id=content_id,
-            queue_type=queue_type,
-            priority=1,
-            websocket_manager=None,
-        )
+        # Mock broadcaster
+        mock_broadcaster = AsyncMock()
+        mock_get_broadcaster.return_value = mock_broadcaster
+
+        with patch.object(queue_service, "add_post_to_queue") as mock_add_post:
+            mock_add_post.return_value = {"pk": uuid4()}
+
+            # Should not raise exception when websocket_manager is None
+            await queue_service.add_to_queue(
+                user_id=user_id,
+                content_id=content_id,
+                queue_type=queue_type,
+                priority=1,
+                websocket_manager=None,
+            )
 
     @pytest.mark.asyncio
     async def test_queue_websocket_error_handling(
@@ -247,14 +255,18 @@ class TestQueueServiceWebSocket:
         mock_queue_repo.get_user_position.return_value = 1
         mock_queue_repo.get_queue_size.return_value = 5
 
-        with patch(
-            "therobotoverlord_api.services.queue_service.get_event_broadcaster"
-        ) as mock_get_broadcaster:
+        with (
+            patch(
+                "therobotoverlord_api.services.queue_service.get_event_broadcaster"
+            ) as mock_get_broadcaster,
+            patch.object(queue_service, "add_post_to_queue") as mock_add_post,
+        ):
             mock_broadcaster = AsyncMock()
             mock_broadcaster.broadcast_queue_position_update.side_effect = Exception(
                 "WebSocket error"
             )
             mock_get_broadcaster.return_value = mock_broadcaster
+            mock_add_post.return_value = {"pk": uuid4()}
 
             # Should not raise exception even if WebSocket fails
             await queue_service.add_to_queue(
