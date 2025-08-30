@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -18,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - therobotoverlord
 
   redis:
     image: redis:8-alpine
@@ -31,7 +31,82 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - therobotoverlord
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: therobotoverlord-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_DATABASE=therobotoverlord
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=password
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/therobotoverlord
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DATABASE=0
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - HOST=0.0.0.0
+      - PORT=8000
+      - CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    networks:
+      - therobotoverlord
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: therobotoverlord-workers
+    command: ["/app/scripts/start_workers.sh"]
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_DATABASE=therobotoverlord
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=password
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/therobotoverlord
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DATABASE=0
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    networks:
+      - therobotoverlord
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  therobotoverlord:
+    driver: bridge
