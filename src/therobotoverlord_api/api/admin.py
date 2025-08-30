@@ -8,6 +8,7 @@ from fastapi import Query
 from fastapi import Request
 
 from therobotoverlord_api.auth.dependencies import require_admin
+from therobotoverlord_api.auth.rate_limiting import check_admin_rate_limit
 from therobotoverlord_api.database.models.admin_action import AdminActionResponse
 from therobotoverlord_api.database.models.admin_action import AdminActionType
 from therobotoverlord_api.database.models.admin_action import AuditLogResponse
@@ -31,6 +32,7 @@ async def get_admin_dashboard(
     dashboard_service: Annotated[DashboardService, Depends(get_dashboard_service)],
     request: Request,
     period: Annotated[str, Query()] = "24h",
+    _: Annotated[None, Depends(check_admin_rate_limit)] = None,
 ) -> DashboardOverview:
     """Get comprehensive admin dashboard with aggregated data from all systems."""
 
@@ -50,6 +52,7 @@ async def create_announcement(
     announcement: AnnouncementCreate,
     current_user: Annotated[User, Depends(require_admin)],
     dashboard_service: Annotated[DashboardService, Depends(get_dashboard_service)],
+    _: Annotated[None, Depends(check_admin_rate_limit)],
 ) -> SystemAnnouncement:
     """Create system announcement."""
 
@@ -72,6 +75,7 @@ async def get_announcements(
     current_user: Annotated[User, Depends(require_admin)],
     dashboard_service: Annotated[DashboardService, Depends(get_dashboard_service)],
     active_only: Annotated[bool, Query()] = True,  # noqa: FBT002
+    _: Annotated[None, Depends(check_admin_rate_limit)] = None,
 ) -> list[SystemAnnouncement]:
     """Get system announcements."""
 
@@ -84,6 +88,7 @@ async def get_audit_log(
     dashboard_service: Annotated[DashboardService, Depends(get_dashboard_service)],
     limit: Annotated[int, Query()] = 100,
     offset: Annotated[int, Query()] = 0,
+    _: Annotated[None, Depends(check_admin_rate_limit)] = None,
 ) -> AuditLogResponse:
     """Get admin action audit log."""
 

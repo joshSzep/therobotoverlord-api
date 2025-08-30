@@ -10,6 +10,7 @@ from fastapi import Query
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.rate_limiting import check_sanctions_rate_limit
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.sanction import Sanction
 from therobotoverlord_api.database.models.sanction import SanctionCreate
@@ -37,6 +38,7 @@ async def apply_sanction(
     sanction_data: SanctionCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
+    _: Annotated[None, Depends(check_sanctions_rate_limit)] = None,
 ) -> Sanction | None:
     """Apply a sanction to a user (moderators and admins only)."""
     require_moderator_or_admin(current_user)
@@ -62,6 +64,7 @@ async def get_all_sanctions(
     active_only: bool = False,
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    _: Annotated[None, Depends(check_sanctions_rate_limit)] = None,
 ) -> list[SanctionWithDetails]:
     """List all sanctions (moderators and admins only)."""
     require_moderator_or_admin(current_user)
@@ -79,6 +82,7 @@ async def get_sanction(
     sanction_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
+    _: Annotated[None, Depends(check_sanctions_rate_limit)] = None,
 ) -> Sanction:
     """Get a specific sanction (moderators and admins only)."""
     require_moderator_or_admin(current_user)
@@ -99,6 +103,7 @@ async def update_sanction(
     sanction_data: SanctionUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
+    _: Annotated[None, Depends(check_sanctions_rate_limit)] = None,
 ) -> Sanction:
     """Update a sanction (moderators and admins only)."""
     require_moderator_or_admin(current_user)
@@ -126,6 +131,7 @@ async def remove_sanction(
     sanction_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     sanction_service: Annotated[SanctionService, Depends(get_sanction_service)],
+    _: Annotated[None, Depends(check_sanctions_rate_limit)] = None,
 ) -> dict:
     """Remove (deactivate) a sanction (moderators and admins only)."""
     require_moderator_or_admin(current_user)

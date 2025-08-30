@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from fastapi import status
 
 from therobotoverlord_api.api.auth import get_current_user
+from therobotoverlord_api.auth.rate_limiting import check_rbac_rate_limit
 from therobotoverlord_api.database.models.rbac import Permission
 from therobotoverlord_api.database.models.rbac import PermissionCheckResult
 from therobotoverlord_api.database.models.rbac import PermissionCreate
@@ -55,6 +56,7 @@ async def require_moderator_permission(
 @router.get("/roles", response_model=list[Role])
 async def get_roles(
     current_user: Annotated[User, Depends(require_moderator_permission)],
+    _: Annotated[None, Depends(check_rbac_rate_limit)] = None,
 ):
     """Get all roles."""
     return await rbac_service.get_all_roles()
@@ -64,6 +66,7 @@ async def get_roles(
 async def create_role(
     role_data: RoleCreate,
     current_user: Annotated[User, Depends(require_admin_permission)],
+    _: Annotated[None, Depends(check_rbac_rate_limit)] = None,
 ):
     """Create a new role."""
     return await rbac_service.create_role(role_data)
@@ -71,7 +74,9 @@ async def create_role(
 
 @router.get("/roles/{role_id}", response_model=RoleWithPermissions)
 async def get_role(
-    role_id: UUID, current_user: Annotated[User, Depends(require_moderator_permission)]
+    role_id: UUID,
+    current_user: Annotated[User, Depends(require_moderator_permission)],
+    _: Annotated[None, Depends(check_rbac_rate_limit)] = None,
 ):
     """Get role with permissions."""
     role = await rbac_service.get_role_with_permissions(role_id)
@@ -87,6 +92,7 @@ async def update_role(
     role_id: UUID,
     role_data: RoleUpdate,
     current_user: Annotated[User, Depends(require_admin_permission)],
+    _: Annotated[None, Depends(check_rbac_rate_limit)] = None,
 ):
     """Update a role."""
     role = await rbac_service.update_role(role_id, role_data)
@@ -99,7 +105,9 @@ async def update_role(
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
-    role_id: UUID, current_user: Annotated[User, Depends(require_admin_permission)]
+    role_id: UUID,
+    current_user: Annotated[User, Depends(require_admin_permission)],
+    _: Annotated[None, Depends(check_rbac_rate_limit)] = None,
 ):
     """Delete a role."""
     success = await rbac_service.delete_role(role_id)

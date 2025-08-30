@@ -13,6 +13,7 @@ from therobotoverlord_api.auth.middleware import AuthenticatedUser
 from therobotoverlord_api.auth.middleware import get_current_user
 from therobotoverlord_api.auth.models import LoginRequest
 from therobotoverlord_api.auth.models import LogoutRequest
+from therobotoverlord_api.auth.rate_limiting import check_auth_rate_limit
 from therobotoverlord_api.auth.service import AuthService
 from therobotoverlord_api.config.auth import get_auth_settings
 
@@ -39,6 +40,7 @@ async def oauth_callback(
     request: Request,
     response: Response,
     login_data: LoginRequest,
+    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Handle Google OAuth callback and complete login."""
     try:
@@ -80,6 +82,7 @@ async def oauth_callback(
 async def refresh_tokens(
     request: Request,
     response: Response,
+    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Refresh access token using refresh token."""
     refresh_token = request.cookies.get("__Secure-trl_rt")
@@ -135,6 +138,7 @@ async def logout(
     response: Response,
     logout_data: LogoutRequest,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Logout user by revoking session(s)."""
     try:
