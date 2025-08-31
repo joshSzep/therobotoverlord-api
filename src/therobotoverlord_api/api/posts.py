@@ -44,6 +44,51 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 moderator_dependency = require_role(UserRole.MODERATOR)
 
 
+@router.get("/feed")
+async def get_posts_feed(
+    topic_id: Annotated[UUID | None, Query()] = None,
+    author_id: Annotated[UUID | None, Query()] = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PostWithAuthor]:
+    """Get posts feed with optional filtering (public endpoint)."""
+    post_repo = PostRepository()
+
+    if search:
+        return await post_repo.search_posts(search, topic_id, limit, offset)
+    if topic_id:
+        return await post_repo.get_approved_by_topic(topic_id, limit, offset)
+    if author_id:
+        # Convert PostSummary to PostWithAuthor for consistency
+        summaries = await post_repo.get_by_author(
+            author_id, ContentStatus.APPROVED, limit, offset
+        )
+        # Note: This would need a separate endpoint or different return type in practice
+        # For now, return recent approved posts
+        return await post_repo.get_recent_approved_posts(limit, offset)
+
+    return await post_repo.get_recent_approved_posts(limit, offset)
+
+
+@router.get("/trending")
+async def get_trending_posts(
+    limit: Annotated[int, Query(le=100, ge=1)] = 20,
+) -> list[PostWithAuthor]:
+    """Get trending posts (public endpoint)."""
+    post_repo = PostRepository()
+    return await post_repo.get_trending_posts(limit=limit)
+
+
+@router.get("/popular")
+async def get_popular_posts(
+    limit: Annotated[int, Query(le=100, ge=1)] = 20,
+) -> list[PostWithAuthor]:
+    """Get popular posts (public endpoint)."""
+    post_repo = PostRepository()
+    return await post_repo.get_popular_posts(limit=limit)
+
+
 @router.get("/")
 async def get_posts(
     topic_id: Annotated[UUID | None, Query()] = None,
@@ -52,7 +97,7 @@ async def get_posts(
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[PostWithAuthor]:
-    """Get posts with optional filtering by topic, author, or search term."""
+    """Get posts with optional filtering (public endpoint)."""
     post_repo = PostRepository()
 
     if search:

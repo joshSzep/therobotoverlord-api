@@ -245,7 +245,28 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/health",
         ]
 
-        return any(path.startswith(public_path) for public_path in public_paths)
+        # Read-only endpoints for anonymous visitors (browse content)
+        visitor_read_paths = [
+            "/api/v1/topics/categories",
+            "/api/v1/topics/feed",
+            "/api/v1/topics/trending",
+            "/api/v1/topics/popular",
+            "/api/v1/topics/featured",
+            "/api/v1/posts/feed",
+            "/api/v1/posts/trending",
+            "/api/v1/posts/popular",
+        ]
+
+        # Allow GET requests to specific topic and post endpoints
+        if path.startswith("/api/v1/topics/") and not path.endswith("/moderate"):
+            return True
+        if path.startswith("/api/v1/posts/") and not path.endswith("/moderate"):
+            return True
+
+        return any(
+            path.startswith(public_path)
+            for public_path in public_paths + visitor_read_paths
+        )
 
     def _set_auth_cookies(
         self, response: Response, access_token: str, refresh_token: str

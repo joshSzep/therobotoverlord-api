@@ -45,7 +45,7 @@ class PostRepository(BaseRepository[Post]):
         limit: int = 100,
         offset: int = 0,
     ) -> list[PostWithAuthor]:
-        """Get posts by topic with author information, ordered chronologically by submission."""
+        """Get posts by topic with author information."""
         where_clause = "p.topic_pk = $1"
         params: list[UUID | str | int] = [topic_pk]
 
@@ -55,9 +55,19 @@ class PostRepository(BaseRepository[Post]):
 
         query = f"""
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE {where_clause}
@@ -77,9 +87,19 @@ class PostRepository(BaseRepository[Post]):
         """Get rejected posts (graveyard)."""
         query = """
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'rejected'
@@ -147,9 +167,19 @@ class PostRepository(BaseRepository[Post]):
         """Get rejected posts by author with author information."""
         query = """
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'rejected' AND p.author_pk = $1
@@ -294,9 +324,19 @@ class PostRepository(BaseRepository[Post]):
         """Get recent approved posts across all topics, ordered chronologically by submission."""
         query = """
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'approved'
@@ -325,9 +365,19 @@ class PostRepository(BaseRepository[Post]):
 
         query = f"""
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE {where_clause}
@@ -347,9 +397,19 @@ class PostRepository(BaseRepository[Post]):
         """Get posts currently in-transit through the evaluation system."""
         query = """
             SELECT
-                p.*,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'in_transit'
@@ -368,8 +428,6 @@ class PostRepository(BaseRepository[Post]):
         query = """
             SELECT
                 p.pk,
-                p.created_at,
-                p.updated_at,
                 p.topic_pk,
                 p.parent_post_pk,
                 p.author_pk,
@@ -379,8 +437,9 @@ class PostRepository(BaseRepository[Post]):
                 p.rejection_reason,
                 p.submitted_at,
                 p.approved_at,
-                u.username as author_username,
-                u.avatar_url as author_avatar_url
+                p.created_at,
+                p.updated_at,
+                u.username as author_username
             FROM posts p
             JOIN users u ON p.author_pk = u.pk
             WHERE p.status = 'submitted'
@@ -390,4 +449,76 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
+    async def get_trending_posts(self, limit: int = 20) -> list[PostWithAuthor]:
+        """Get trending posts based on recent activity and engagement."""
+        query = """
+            SELECT
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username,
+                COALESCE(reply_counts.reply_count, 0) as engagement_score
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            LEFT JOIN (
+                SELECT parent_post_pk, COUNT(*) as reply_count
+                FROM posts
+                WHERE status = 'approved'
+                AND submitted_at > NOW() - INTERVAL '7 days'
+                GROUP BY parent_post_pk
+            ) reply_counts ON p.pk = reply_counts.parent_post_pk
+            WHERE p.status = 'approved'
+            AND p.submitted_at > NOW() - INTERVAL '30 days'
+            ORDER BY engagement_score DESC, p.submitted_at DESC
+            LIMIT $1
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit)
+            return [PostWithAuthor.model_validate(record) for record in records]
+
+    async def get_popular_posts(self, limit: int = 20) -> list[PostWithAuthor]:
+        """Get popular posts based on total reply count."""
+        query = """
+            SELECT
+                p.pk,
+                p.topic_pk,
+                p.parent_post_pk,
+                p.author_pk,
+                p.content,
+                p.status,
+                p.overlord_feedback,
+                p.submitted_at,
+                p.approved_at,
+                p.rejection_reason,
+                p.created_at,
+                p.updated_at,
+                u.username as author_username,
+                COALESCE(reply_counts.reply_count, 0) as total_replies
+            FROM posts p
+            JOIN users u ON p.author_pk = u.pk
+            LEFT JOIN (
+                SELECT parent_post_pk, COUNT(*) as reply_count
+                FROM posts
+                WHERE status = 'approved'
+                GROUP BY parent_post_pk
+            ) reply_counts ON p.pk = reply_counts.parent_post_pk
+            WHERE p.status = 'approved'
+            ORDER BY total_replies DESC, p.submitted_at DESC
+            LIMIT $1
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query, limit)
             return [PostWithAuthor.model_validate(record) for record in records]

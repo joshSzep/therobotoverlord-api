@@ -35,6 +35,88 @@ moderator_dependency = require_role(UserRole.MODERATOR)
 citizen_dependency = require_role(UserRole.CITIZEN)
 
 
+@router.get("/categories")
+async def get_categories() -> list[str]:
+    """Get all topic categories (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_all_categories()
+
+
+@router.get("/feed")
+async def get_topics_feed(
+    limit: Annotated[int, Query(le=100, ge=1)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[TopicSummary]:
+    """Get approved topics feed (public endpoint)."""
+    from therobotoverlord_api.database.connection import get_db_connection
+
+    # Simple query without complex joins to test
+    query = """
+        SELECT
+            pk,
+            title,
+            description,
+            created_by_overlord,
+            status,
+            created_at,
+            CASE WHEN created_by_overlord THEN 'The Overlord' ELSE 'Anonymous' END as author_username,
+            0 as post_count,
+            '{}' as tags
+        FROM topics
+        WHERE status = 'approved'
+        ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2
+    """
+
+    async with get_db_connection() as connection:
+        records = await connection.fetch(query, limit, offset)
+        results = []
+        for record in records:
+            # Convert record to dict to debug the issue
+            record_dict = dict(record)
+            # Convert tags from string to list
+            if "tags" in record_dict and isinstance(record_dict["tags"], str):
+                import json
+
+                try:
+                    record_dict["tags"] = (
+                        json.loads(record_dict["tags"])
+                        if record_dict["tags"] != "{}"
+                        else []
+                    )
+                except json.JSONDecodeError:
+                    record_dict["tags"] = []
+            results.append(TopicSummary.model_validate(record_dict))
+        return results
+
+
+@router.get("/trending")
+async def get_trending_topics(
+    limit: Annotated[int, Query(le=100, ge=1)] = 20,
+) -> list[TopicSummary]:
+    """Get trending topics (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_trending_topics(limit=limit)
+
+
+@router.get("/popular")
+async def get_popular_topics(
+    limit: Annotated[int, Query(le=100, ge=1)] = 20,
+) -> list[TopicSummary]:
+    """Get popular topics (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_popular_topics(limit=limit)
+
+
+@router.get("/featured")
+async def get_featured_topics(
+    limit: Annotated[int, Query(le=100, ge=1)] = 10,
+) -> list[TopicSummary]:
+    """Get featured topics (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_featured_topics(limit=limit)
+
+
 @router.get("/")
 async def get_topics(
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
@@ -43,7 +125,7 @@ async def get_topics(
     overlord_only: Annotated[bool, Query()] = False,  # noqa: FBT002
     tags: Annotated[list[str] | None, Query()] = None,
 ) -> list[TopicSummary]:
-    """Get approved topics with optional search and filtering."""
+    """Get approved topics with optional search and filtering (public endpoint)."""
     topic_repo = TopicRepository()
 
     if overlord_only:
