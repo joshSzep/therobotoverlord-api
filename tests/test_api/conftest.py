@@ -1,10 +1,11 @@
 """Test configuration for API coverage tests."""
 
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
 import pytest
 import pytest_asyncio
 
-from unittest.mock import AsyncMock
-from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,7 +86,7 @@ def mock_redis_globally():
     """Mock Redis connections globally for all tests."""
     # Mock at the module level before any imports happen
     patches = []
-    
+
     # Mock Redis client creation
     mock_redis_client = AsyncMock()
     mock_redis_client.get.return_value = None
@@ -97,30 +98,38 @@ def mock_redis_globally():
     mock_redis_client.hget.return_value = None
     mock_redis_client.hset.return_value = True
     mock_redis_client.hdel.return_value = 1
-    
+
     # Mock Redis pool
     mock_redis_pool = AsyncMock()
     mock_redis_pool.ping.return_value = True
     mock_redis_pool.get_connection.return_value = mock_redis_client
-    
+
     # Patch all Redis-related functions
-    patches.extend([
-        patch("therobotoverlord_api.workers.redis_connection.get_redis_client", return_value=mock_redis_client),
-        patch("therobotoverlord_api.workers.redis_connection.get_redis_pool", return_value=mock_redis_pool),
-        patch("arq.connections.create_pool", return_value=mock_redis_pool),
-        patch("redis.asyncio.Redis", return_value=mock_redis_client),
-        patch("redis.asyncio.ConnectionPool", return_value=mock_redis_pool),
-    ])
-    
+    patches.extend(
+        [
+            patch(
+                "therobotoverlord_api.workers.redis_connection.get_redis_client",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "therobotoverlord_api.workers.redis_connection.get_redis_pool",
+                return_value=mock_redis_pool,
+            ),
+            patch("arq.connections.create_pool", return_value=mock_redis_pool),
+            patch("redis.asyncio.Redis", return_value=mock_redis_client),
+            patch("redis.asyncio.ConnectionPool", return_value=mock_redis_pool),
+        ]
+    )
+
     # Start all patches
     for p in patches:
         p.start()
-    
+
     yield {
         "client": mock_redis_client,
         "pool": mock_redis_pool,
     }
-    
+
     # Stop all patches
     for p in patches:
         p.stop()
@@ -135,13 +144,15 @@ def mock_database_connection():
         mock_connection.fetchrow.return_value = None
         mock_connection.fetchval.return_value = None
         mock_connection.execute.return_value = None
-        
+
         mock_db.return_value.__aenter__.return_value = mock_connection
         mock_db.return_value.__aexit__.return_value = None
-        
+
         # Also mock the Database class methods
-        with patch("therobotoverlord_api.database.connection.Database.get_connection") as mock_db_conn:
+        with patch(
+            "therobotoverlord_api.database.connection.Database.get_connection"
+        ) as mock_db_conn:
             mock_db_conn.return_value.__aenter__.return_value = mock_connection
             mock_db_conn.return_value.__aexit__.return_value = None
-            
+
             yield
