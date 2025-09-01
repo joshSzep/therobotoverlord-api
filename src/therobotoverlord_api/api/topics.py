@@ -10,6 +10,7 @@ from fastapi import Query
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import TopicStatus
 from therobotoverlord_api.database.models.base import UserRole
@@ -36,14 +37,16 @@ citizen_dependency = require_role(UserRole.CITIZEN)
 
 
 @router.get("/categories")
-async def get_categories() -> list[str]:
+async def get_categories() -> dict:
     """Get all topic categories (public endpoint)."""
     topic_repo = TopicRepository()
-    return await topic_repo.get_all_categories()
+    categories = await topic_repo.get_categories_with_details()
+    return {"status": "ok", "data": categories}
 
 
 @router.get("/feed")
 async def get_topics_feed(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TopicSummary]:
@@ -92,6 +95,7 @@ async def get_topics_feed(
 
 @router.get("/trending")
 async def get_trending_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
     limit: Annotated[int, Query(le=100, ge=1)] = 20,
 ) -> list[TopicSummary]:
     """Get trending topics (public endpoint)."""
@@ -99,8 +103,29 @@ async def get_trending_topics(
     return await topic_repo.get_trending_topics(limit=limit)
 
 
+@router.get("/overlord-only")
+async def get_overlord_only_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    limit: Annotated[int, Query(le=100, ge=1)] = 20,
+) -> list[TopicSummary]:
+    """Get popular topics (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_popular_topics(limit=limit)
+
+
+@router.get("/search")
+async def search_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    limit: Annotated[int, Query(le=100, ge=1)] = 10,
+) -> list[TopicSummary]:
+    """Get featured topics (public endpoint)."""
+    topic_repo = TopicRepository()
+    return await topic_repo.get_featured_topics(limit=limit)
+
+
 @router.get("/popular")
 async def get_popular_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
     limit: Annotated[int, Query(le=100, ge=1)] = 20,
 ) -> list[TopicSummary]:
     """Get popular topics (public endpoint)."""
@@ -110,6 +135,7 @@ async def get_popular_topics(
 
 @router.get("/featured")
 async def get_featured_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
     limit: Annotated[int, Query(le=100, ge=1)] = 10,
 ) -> list[TopicSummary]:
     """Get featured topics (public endpoint)."""
@@ -119,6 +145,7 @@ async def get_featured_topics(
 
 @router.get("/")
 async def get_topics(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     search: Annotated[str | None, Query(max_length=100)] = None,
@@ -138,7 +165,10 @@ async def get_topics(
 
 
 @router.get("/{topic_id}")
-async def get_topic(topic_id: UUID) -> TopicWithAuthor:
+async def get_topic(
+    topic_id: UUID,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+) -> TopicWithAuthor:
     """Get a specific topic by ID."""
     topic_repo = TopicRepository()
     topic = await topic_repo.get_with_author(topic_id)
@@ -206,6 +236,7 @@ async def create_topic(
 async def get_related_topics(
     topic_id: UUID,
     limit: Annotated[int, Query(le=10, ge=1)] = 5,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[TopicSummary]:
     """Get topics related by shared tags."""
     topic_repo = TopicRepository()

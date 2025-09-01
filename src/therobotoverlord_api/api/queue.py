@@ -11,6 +11,7 @@ from fastapi import Query
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.services.queue_service import get_queue_service
 from therobotoverlord_api.workers.redis_connection import get_redis_client
@@ -42,6 +43,7 @@ async def get_overall_queue_status():
 @router.get("/status/{queue_type}")
 async def get_queue_type_status(
     queue_type: Annotated[str, Path(pattern="^(topics|posts|messages)$")],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """Get detailed status for a specific queue type."""
     queue_service = await get_queue_service()
@@ -86,6 +88,7 @@ async def get_content_queue_position(
 @router.get("/visualization")
 async def get_queue_visualization_data(
     limit: Annotated[int, Query(le=50, ge=1)] = 20,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """Get data for public queue visualization (pneumatic tube system)."""
     queue_service = await get_queue_service()
@@ -155,7 +158,9 @@ async def get_queue_visualization_data(
 
 
 @router.get("/health")
-async def get_queue_health():
+async def get_queue_health(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+):
     """Get queue system health status."""
     queue_service = await get_queue_service()
 

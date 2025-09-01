@@ -9,13 +9,13 @@ from fastapi import Request
 from fastapi import Response
 from fastapi import status
 
-from therobotoverlord_api.auth.middleware import AuthenticatedUser
-from therobotoverlord_api.auth.middleware import get_current_user
+from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.auth.models import LoginRequest
 from therobotoverlord_api.auth.models import LogoutRequest
 from therobotoverlord_api.auth.rate_limiting import check_auth_rate_limit
 from therobotoverlord_api.auth.service import AuthService
 from therobotoverlord_api.config.auth import get_auth_settings
+from therobotoverlord_api.database.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -35,8 +35,8 @@ async def initiate_login():
     }
 
 
-@router.post("/callback")
-async def oauth_callback(
+@router.get("/callback")
+async def handle_callback(
     request: Request,
     response: Response,
     login_data: LoginRequest,
@@ -137,7 +137,7 @@ async def logout(
     request: Request,
     response: Response,
     logout_data: LogoutRequest,
-    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Logout user by revoking session(s)."""
@@ -146,11 +146,17 @@ async def logout(
 
         if logout_data.revoke_all_sessions:
             # Revoke all user sessions
-            revoked_count = await auth_service.logout_all_sessions(current_user.user_id)
+            revoked_count = await auth_service.logout_all_sessions(current_user.id)
             message = f"Logged out from {revoked_count} sessions"
         else:
             # Revoke current session only
-            success = await auth_service.logout(current_user.session_id)
+            # Get session ID from request cookies for current session logout
+            refresh_token = request.cookies.get("__Secure-trl_rt")
+            success = (
+                await auth_service.logout_by_refresh_token(refresh_token)
+                if refresh_token
+                else False
+            )
             message = "Logged out successfully" if success else "Logout failed"
 
         # Clear authentication cookies
@@ -172,11 +178,11 @@ async def logout(
 
 @router.get("/me")
 async def get_current_user_info(
-    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     """Get current authenticated user information."""
     auth_service = AuthService()
-    user = await auth_service.get_user_info(current_user.user_id)
+    user = await auth_service.get_user_info(current_user.id)
 
     if not user:
         raise HTTPException(
@@ -192,7 +198,7 @@ async def get_current_user_info(
             "email": user.email,
             "role": user.role,
             "loyalty_score": user.loyalty_score,
-            "permissions": current_user.permissions,
+            "permissions": [],  # TODO(@josh): Add permissions logic
             "created_at": user.created_at,
         },
     }

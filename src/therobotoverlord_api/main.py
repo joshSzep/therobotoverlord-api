@@ -1,7 +1,9 @@
 """Main application entry point for The Robot Overlord API."""
 
 from contextlib import asynccontextmanager
+from typing import Annotated
 
+from fastapi import Depends
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,10 +27,11 @@ from therobotoverlord_api.api.topics import router as topics_router
 from therobotoverlord_api.api.translations import router as translations_router
 from therobotoverlord_api.api.users import router as users_router
 from therobotoverlord_api.api.websocket import router as websocket_router
-from therobotoverlord_api.auth.middleware import AuthenticationMiddleware
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.database.connection import close_database
 from therobotoverlord_api.database.connection import db
 from therobotoverlord_api.database.connection import init_database
+from therobotoverlord_api.database.models.user import User
 
 
 @asynccontextmanager
@@ -59,22 +62,19 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Add authentication middleware
-    app.add_middleware(AuthenticationMiddleware)
-
     # Include routers
     app.include_router(admin_router, prefix="/api/v1")
     app.include_router(appeals_router, prefix="/api/v1")
     app.include_router(appeals_dashboard_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
-    app.include_router(badges_router)
+    app.include_router(badges_router, prefix="/api/v1")
     app.include_router(flags_router, prefix="/api/v1")
     app.include_router(leaderboard_router, prefix="/api/v1")
     app.include_router(loyalty_router, prefix="/api/v1")
     app.include_router(messages_router, prefix="/api/v1")
     app.include_router(posts_router, prefix="/api/v1")
     app.include_router(queue_router, prefix="/api/v1")
-    app.include_router(rbac_router)
+    app.include_router(rbac_router, prefix="/api/v1")
     app.include_router(sanctions_router, prefix="/api/v1")
     app.include_router(tags_router, prefix="/api/v1")
     app.include_router(topics_router, prefix="/api/v1")
@@ -83,7 +83,9 @@ def create_app() -> FastAPI:
     app.include_router(websocket_router)
 
     @app.get("/health")
-    async def health_check():
+    async def health_check(
+        user: Annotated[User | None, Depends(get_optional_user)] = None,
+    ):
         """Health check endpoint."""
 
         db_healthy = await db.health_check()

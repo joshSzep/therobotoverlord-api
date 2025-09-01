@@ -14,26 +14,52 @@ from therobotoverlord_api.database.repositories.user import UserRepository
 
 async def get_current_user(request: Request) -> User:
     """Get the current authenticated user from the request."""
-    # Check if user is authenticated via middleware
-    if not hasattr(request.state, "user_id"):
+    # Extract tokens from cookies
+    access_token = request.cookies.get("__Secure-trl_at")
+    if not access_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Access token required"
         )
 
-    user_repo = UserRepository()
-    user = await user_repo.get_by_pk(request.state.user_id)
+    # Import here to avoid circular imports
+    from therobotoverlord_api.auth.jwt_service import JWTService
 
-    if not user:
+    jwt_service = JWTService()
+
+    try:
+        # Validate token
+        payload = jwt_service.decode_token(access_token)
+        user_id = payload.get("user_id")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+
+        # Get user from database
+        user_repo = UserRepository()
+        user = await user_repo.get_by_pk(user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+            )
+
+        if user.is_banned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="User account is banned"
+            )
+
+        return user
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Invalid token
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
-        )
-
-    if user.is_banned:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User account is banned"
-        )
-
-    return user
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from e
 
 
 # Create dependency instance to avoid function calls in defaults
@@ -68,16 +94,36 @@ def require_role(required_role: UserRole) -> Callable:
 
 async def get_optional_user(request: Request) -> User | None:
     """Get the current user if authenticated, otherwise None."""
-    if not hasattr(request.state, "user_id"):
+    # Extract tokens from cookies for optional auth
+    access_token = request.cookies.get("__Secure-trl_at")
+    if not access_token:
         return None
 
-    user_repo = UserRepository()
-    user = await user_repo.get_by_pk(request.state.user_id)
+    # Import here to avoid circular imports
+    from therobotoverlord_api.auth.jwt_service import JWTService
 
-    if not user or user.is_banned:
+    jwt_service = JWTService()
+
+    try:
+        # Validate token
+        payload = jwt_service.decode_token(access_token)
+        user_id = payload.get("user_id")
+
+        if not user_id:
+            return None
+
+        # Get user from database
+        user_repo = UserRepository()
+        user = await user_repo.get_by_pk(user_id)
+
+        if not user or user.is_banned:
+            return None
+
+        return user
+
+    except Exception:
+        # Invalid token, return None for optional auth
         return None
-
-    return user
 
 
 # Convenience dependencies for common roles

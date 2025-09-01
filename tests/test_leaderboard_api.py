@@ -9,12 +9,12 @@ from uuid import uuid4
 import pytest
 
 from fastapi import FastAPI
-from fastapi import HTTPException
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from therobotoverlord_api.api.leaderboard import router
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.leaderboard import LeaderboardEntry
 from therobotoverlord_api.database.models.leaderboard import LeaderboardFilters
@@ -60,8 +60,8 @@ class TestLeaderboardAPI:
         app = FastAPI()
         app.include_router(router, prefix="/api/v1")
 
-        # Override the get_current_user dependency to return our mock user
-        app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        # Override the get_optional_user dependency to return our mock user
+        app.dependency_overrides[get_optional_user] = lambda: mock_current_user
 
         return TestClient(app)
 
@@ -636,20 +636,21 @@ class TestLeaderboardAPI:
         assert "Failed to refresh" in data["detail"]
 
     @pytest.mark.asyncio
-    async def test_admin_refresh_forbidden(self, client):
+    async def test_admin_refresh_forbidden(self, mock_current_user):
         """Test admin refresh leaderboard returns 403 for non-admin users."""
 
-        # Mock require_role to raise 403 for non-admin
-        def mock_require_role_forbidden():
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        # Create a test client with non-admin user
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
 
-        with patch("therobotoverlord_api.api.leaderboard.require_role") as mock_require:
-            mock_require.return_value = mock_require_role_forbidden
+        # Override dependencies to return non-admin user
+        app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        app.dependency_overrides[get_optional_user] = lambda: mock_current_user
 
-            response = client.post("/api/v1/leaderboard/refresh")
+        client = TestClient(app)
+        response = client.post("/api/v1/leaderboard/refresh")
 
-            assert response.status_code == 403
-            assert "Insufficient permissions" in response.json()["detail"]
+        assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_parameter_validation_limits(self, client, mock_leaderboard_service):

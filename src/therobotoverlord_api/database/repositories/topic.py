@@ -331,6 +331,49 @@ class TopicRepository(BaseRepository[Topic]):
             records = await connection.fetch(query)
             return [record["name"] for record in records]
 
+    async def get_categories_with_details(self) -> list[dict[str, Any]]:
+        """Get all unique topic categories/tags with details for frontend."""
+        query = """
+            SELECT
+                tg.pk as id,
+                tg.name,
+                COUNT(DISTINCT t.pk) as post_count
+            FROM tags tg
+            JOIN topic_tags tt ON tg.pk = tt.tag_pk
+            JOIN topics t ON tt.topic_pk = t.pk
+            WHERE t.status = 'approved'
+            GROUP BY tg.pk, tg.name
+            ORDER BY tg.name
+        """
+
+        async with get_db_connection() as connection:
+            records = await connection.fetch(query)
+            categories = []
+            colors = [
+                "#FF6B6B",
+                "#4ECDC4",
+                "#45B7D1",
+                "#96CEB4",
+                "#FFEAA7",
+                "#DDA0DD",
+                "#98D8C8",
+                "#F7DC6F",
+                "#BB8FCE",
+                "#85C1E9",
+            ]
+
+            for i, record in enumerate(records):
+                categories.append(
+                    {
+                        "id": str(record["id"]),
+                        "name": record["name"],
+                        "color": colors[i % len(colors)],
+                        "postCount": record["post_count"],
+                    }
+                )
+
+            return categories
+
     async def get_topics_feed(
         self, limit: int = 20, offset: int = 0, tag_names: list[str] | None = None
     ) -> list[TopicSummary]:

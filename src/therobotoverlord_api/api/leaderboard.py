@@ -11,6 +11,7 @@ from fastapi import Query
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.leaderboard import LeaderboardEntry
@@ -48,7 +49,7 @@ async def get_leaderboard(
     active_users_only: Annotated[  # noqa: FBT002
         bool, Query(description="Show only active (non-banned) users")
     ] = True,
-    current_user: Annotated[User | None, Depends(get_current_user)] = None,
+    current_user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """
     Get the global leaderboard with optional filtering and search.
@@ -103,6 +104,7 @@ async def get_leaderboard(
 @router.get("/top/{count}")
 async def get_top_users(
     count: Annotated[int, Path(ge=1, le=50)],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """
     Get the top N users for widgets and homepage displays.
@@ -117,7 +119,9 @@ async def get_top_users(
 
 
 @router.get("/stats", response_model=LeaderboardStats)
-async def get_leaderboard_stats():
+async def get_leaderboard_stats(
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+):
     """
     Get overall leaderboard statistics and metadata.
 
@@ -131,6 +135,7 @@ async def get_leaderboard_stats():
 async def search_users(
     q: Annotated[str, Query(min_length=2, max_length=50, description="Search query")],
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> dict[str, str | list[LeaderboardSearchResult]]:
     """
     Search for users by username with fuzzy matching.
@@ -147,7 +152,10 @@ async def search_users(
 
 
 @router.get("/user/{user_pk}", response_model=UserRankLookup)
-async def get_user_rank(user_pk: UUID):
+async def get_user_rank(
+    user_pk: UUID,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+):
     """
     Get a specific user's rank and position in the leaderboard.
 
@@ -183,7 +191,10 @@ async def get_my_leaderboard_stats(
 
 
 @router.get("/user/{user_pk}/stats", response_model=PersonalLeaderboardStats)
-async def get_user_personal_stats(user_pk: UUID):
+async def get_user_personal_stats(
+    user_pk: UUID,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+):
     """
     Get personal leaderboard statistics for a specific user.
 
@@ -201,6 +212,7 @@ async def get_user_personal_stats(user_pk: UUID):
 async def get_users_by_rank_range(
     start_rank: Annotated[int, Query(ge=1)],
     end_rank: Annotated[int, Query(ge=1)],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[LeaderboardEntry]:
     """
     Get users within a specific rank range.
@@ -219,6 +231,7 @@ async def get_users_by_rank_range(
 async def get_users_by_percentile_range(
     start_percentile: Annotated[float, Query(ge=0.0, le=1.0)],
     end_percentile: Annotated[float, Query(ge=0.0, le=1.0)],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[LeaderboardEntry]:
     """
     Get users within a specific percentile range.
@@ -237,6 +250,7 @@ async def get_users_by_percentile_range(
 async def get_nearby_users(
     user_pk: UUID,
     context_size: Annotated[int, Query(ge=1, le=25)] = 10,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """
     Get users near the specified user's rank position.
@@ -285,6 +299,7 @@ async def refresh_leaderboard(
 @router.get("/rank/{rank}")
 async def get_user_at_rank(
     rank: Annotated[int, Path(ge=1, description="Rank position to lookup")],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """
     Get the user at a specific rank position.
@@ -325,6 +340,7 @@ async def get_users_in_percentile(
         float, Path(ge=0.0, le=1.0, description="Percentile threshold (0.1 = top 10%)")
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ):
     """
     Get users within a specific percentile range.

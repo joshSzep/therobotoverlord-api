@@ -4,6 +4,7 @@ from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from unittest.mock import MagicMock
+from unittest.mock import Mock
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -129,23 +130,50 @@ class TestAuthenticationMiddleware:
         return MagicMock(spec=Response)
 
     @pytest.mark.asyncio
-    async def test_public_path_bypass(self, middleware, mock_request):
-        """Test that public paths bypass authentication."""
-        # Test various public paths
-        public_paths = [
-            "/docs",
-            "/openapi.json",
-            "/health",
-            "/api/v1/auth/login",
-            "/api/v1/auth/callback",
-            "/api/v1/auth/jwks",
-            "/api/v1/queue/overview",
-            "/api/v1/leaderboard",
-        ]
+    async def test_public_endpoint_decorator(self, middleware):
+        """Test that endpoints with @public_endpoint decorator bypass authentication."""
+        # Mock a request with a public endpoint
+        mock_request = Mock()
+        mock_request.url.path = "/api/v1/auth/login"
+        mock_request.method = "GET"
 
-        for path in public_paths:
+        # Mock route with public endpoint
+        mock_endpoint = Mock()
+        mock_endpoint.__public_endpoint__ = True
+        mock_route = Mock()
+        mock_route.endpoint = mock_endpoint
+        mock_request.route = mock_route
+
+        assert middleware._is_public_endpoint(mock_request) is True
+
+    @pytest.mark.asyncio
+    async def test_visitor_readable_decorator(self, middleware):
+        """Test that endpoints with @visitor_readable decorator allow GET requests."""
+        # Mock a request with a visitor readable endpoint
+        mock_request = Mock()
+        mock_request.url.path = "/api/v1/topics/feed"
+        mock_request.method = "GET"
+
+        # Mock route with visitor readable endpoint
+        mock_endpoint = Mock()
+        mock_endpoint.__visitor_readable__ = True
+        mock_route = Mock()
+        mock_route.endpoint = mock_endpoint
+        mock_request.route = mock_route
+
+        assert middleware._is_public_endpoint(mock_request) is True
+
+    @pytest.mark.asyncio
+    async def test_system_paths_bypass(self, middleware):
+        """Test that system paths bypass authentication."""
+        system_paths = ["/docs", "/openapi.json"]
+
+        for path in system_paths:
+            mock_request = Mock()
             mock_request.url.path = path
-            assert middleware._is_public_endpoint(path) is True
+            mock_request.method = "GET"
+            mock_request.route = None
+            assert middleware._is_public_endpoint(mock_request) is True
 
     def test_private_path_requires_auth(self, middleware):
         """Test that private paths require authentication."""
@@ -156,7 +184,20 @@ class TestAuthenticationMiddleware:
         ]
 
         for path in private_paths:
-            assert middleware._is_public_endpoint(path) is False
+            mock_request = Mock()
+            mock_request.url.path = path
+            mock_request.method = "GET"
+            # Mock route without decorators
+            mock_endpoint = Mock()
+            # Ensure no public decorators
+            if hasattr(mock_endpoint, "__public_endpoint__"):
+                delattr(mock_endpoint, "__public_endpoint__")
+            if hasattr(mock_endpoint, "__visitor_readable__"):
+                delattr(mock_endpoint, "__visitor_readable__")
+            mock_route = Mock()
+            mock_route.endpoint = mock_endpoint
+            mock_request.route = mock_route
+            assert middleware._is_public_endpoint(mock_request) is False
 
     @pytest.mark.asyncio
     async def test_valid_token_authentication(

@@ -8,9 +8,9 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import status
 
-from therobotoverlord_api.api.auth import get_current_user
 from therobotoverlord_api.api.rbac import require_admin_permission
 from therobotoverlord_api.api.rbac import require_moderator_permission
+from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.database.models.badge import Badge
 from therobotoverlord_api.database.models.badge import BadgeCreate
 from therobotoverlord_api.database.models.badge import BadgeEligibilityCheck
@@ -22,7 +22,7 @@ from therobotoverlord_api.database.repositories.user import UserRepository
 from therobotoverlord_api.services.badge_service import BadgeService
 from therobotoverlord_api.services.rbac_service import RBACService
 
-router = APIRouter(prefix="/api/v1/badges", tags=["badges"])
+router = APIRouter(prefix="/badges", tags=["badges"])
 badge_service = BadgeService()
 
 

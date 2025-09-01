@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi import status
 
+from therobotoverlord_api.auth.dependencies import get_optional_user
 from therobotoverlord_api.auth.dependencies import require_role
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.tag import Tag
@@ -33,6 +34,7 @@ async def get_tags(
     offset: Annotated[int, Query(ge=0)] = 0,
     search: Annotated[str | None, Query(max_length=100)] = None,
     with_counts: Annotated[bool, Query()] = False,  # noqa: FBT002
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[Tag] | list[TagWithTopicCount]:
     """Get all tags with optional search and topic counts."""
     tag_service = get_tag_service()
@@ -50,6 +52,7 @@ async def get_tags(
 @router.get("/popular")
 async def get_popular_tags(
     limit: Annotated[int, Query(le=50, ge=1)] = 20,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[TagWithTopicCount]:
     """Get most popular tags by topic count."""
     tag_service = get_tag_service()
@@ -66,7 +69,10 @@ async def get_tag_stats(
 
 
 @router.get("/{tag_id}")
-async def get_tag(tag_id: UUID) -> Tag:
+async def get_tag(
+    tag_id: UUID,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+) -> Tag:
     """Get a specific tag by ID."""
     tag_service = get_tag_service()
     tag = await tag_service.get_tag_by_pk(tag_id)
@@ -84,6 +90,7 @@ async def get_topics_by_tag(
     tag_id: UUID,
     limit: Annotated[int, Query(le=100, ge=1)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> list[UUID]:
     """Get topic IDs that have a specific tag."""
     tag_service = get_tag_service()
@@ -150,7 +157,10 @@ async def delete_tag(
 
 # Topic tag assignment endpoints
 @router.get("/topics/{topic_id}/tags")
-async def get_topic_tags(topic_id: UUID) -> list[TopicTagWithDetails]:
+async def get_topic_tags(
+    topic_id: UUID,
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+) -> list[TopicTagWithDetails]:
     """Get all tags assigned to a specific topic."""
     tag_service = get_tag_service()
     return await tag_service.get_tags_for_topic(topic_id)

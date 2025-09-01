@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from therobotoverlord_api.auth.decorators import is_public_endpoint
+from therobotoverlord_api.auth.decorators import is_visitor_readable
 from therobotoverlord_api.auth.jwt_service import JWTService
 from therobotoverlord_api.auth.models import TokenClaims
 from therobotoverlord_api.auth.session_service import SessionService
@@ -66,8 +68,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request with authentication handling."""
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
         # Skip authentication for public endpoints
-        if self._is_public_endpoint(request.url.path):
+        if self._is_public_endpoint(request):
             return await call_next(request)
 
         # Extract tokens from cookies
@@ -231,42 +236,30 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         return permissions
 
-    def _is_public_endpoint(self, path: str) -> bool:
-        """Check if endpoint is public and doesn't require authentication."""
-        public_paths = [
+    def _is_public_endpoint(self, request: Request) -> bool:
+        """Check if the endpoint should bypass authentication."""
+        # Check if endpoint is decorated as public (when route is available)
+        if is_public_endpoint(request):
+            return True
+
+        # Check if endpoint is visitor readable (for GET requests)
+        if request.method == "GET" and is_visitor_readable(request):
+            return True
+
+        # FastAPI system endpoints (docs, openapi.json)
+        path = request.url.path
+        system_paths = ["/docs", "/openapi.json"]
+        if any(path.startswith(system_path) for system_path in system_paths):
+            return True
+
+        # Fallback: Auth endpoints that need to be public (when route not available)
+        # This handles cases where middleware runs before routing is resolved
+        auth_public_paths = [
             "/api/v1/auth/login",
             "/api/v1/auth/callback",
             "/api/v1/auth/jwks",
-            "/api/v1/queue/overview",
-            "/api/v1/leaderboard",
-            "/api/v1/tags",
-            "/docs",
-            "/openapi.json",
-            "/health",
         ]
-
-        # Read-only endpoints for anonymous visitors (browse content)
-        visitor_read_paths = [
-            "/api/v1/topics/categories",
-            "/api/v1/topics/feed",
-            "/api/v1/topics/trending",
-            "/api/v1/topics/popular",
-            "/api/v1/topics/featured",
-            "/api/v1/posts/feed",
-            "/api/v1/posts/trending",
-            "/api/v1/posts/popular",
-        ]
-
-        # Allow GET requests to specific topic and post endpoints
-        if path.startswith("/api/v1/topics/") and not path.endswith("/moderate"):
-            return True
-        if path.startswith("/api/v1/posts/") and not path.endswith("/moderate"):
-            return True
-
-        return any(
-            path.startswith(public_path)
-            for public_path in public_paths + visitor_read_paths
-        )
+        return path in auth_public_paths
 
     def _set_auth_cookies(
         self, response: Response, access_token: str, refresh_token: str

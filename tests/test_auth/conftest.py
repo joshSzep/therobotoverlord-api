@@ -24,7 +24,6 @@ from httpx import AsyncClient
 
 from therobotoverlord_api.api.auth import router as auth_router
 from therobotoverlord_api.auth.jwt_service import JWTService
-from therobotoverlord_api.auth.middleware import AuthenticationMiddleware
 from therobotoverlord_api.auth.models import GoogleUserInfo
 from therobotoverlord_api.auth.models import TokenClaims
 from therobotoverlord_api.auth.session_service import SessionService
@@ -261,9 +260,6 @@ def app():
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-
-    # Add authentication middleware
-    app.add_middleware(AuthenticationMiddleware)
 
     # Include routers
     app.include_router(auth_router, prefix="/api/v1")

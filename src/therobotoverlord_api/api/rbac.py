@@ -8,7 +8,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import status
 
-from therobotoverlord_api.api.auth import get_current_user
+from therobotoverlord_api.auth.dependencies import get_current_user
 from therobotoverlord_api.auth.rate_limiting import check_rbac_rate_limit
 from therobotoverlord_api.database.models.rbac import Permission
 from therobotoverlord_api.database.models.rbac import PermissionCheckResult
@@ -23,7 +23,7 @@ from therobotoverlord_api.database.models.rbac import UserWithRoles
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.services.rbac_service import RBACService
 
-router = APIRouter(prefix="/api/v1/rbac", tags=["rbac"])
+router = APIRouter(prefix="/rbac", tags=["rbac"])
 rbac_service = RBACService()
 
 

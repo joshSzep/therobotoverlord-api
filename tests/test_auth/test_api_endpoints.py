@@ -10,9 +10,9 @@ from uuid import uuid4
 import pytest
 
 from fastapi import status
+from httpx import ASGITransport
 from httpx import AsyncClient
 
-from therobotoverlord_api.auth.middleware import AuthenticatedUser
 from therobotoverlord_api.database.models.base import UserRole
 
 
@@ -50,7 +50,8 @@ class TestAuthAPIEndpoints:
             )
 
             with patch("therobotoverlord_api.api.auth._set_auth_cookies"):
-                response = await async_client.post(
+                response = await async_client.request(
+                    "GET",
                     "/api/v1/auth/callback",
                     json={"code": "mock_code", "state": "mock_state"},
                 )
@@ -73,7 +74,8 @@ class TestAuthAPIEndpoints:
             # Mock failed complete_login
             mock_auth_service.complete_login.side_effect = ValueError("Invalid code")
 
-            response = await async_client.post(
+            response = await async_client.request(
+                "GET",
                 "/api/v1/auth/callback",
                 json={"code": "invalid_code", "state": "test_state"},
             )
@@ -86,42 +88,32 @@ class TestAuthAPIEndpoints:
     @pytest.mark.asyncio
     async def test_refresh_endpoint_success(self, authenticated_client: AsyncClient):
         """Test successful token refresh."""
-        jwt_patch = (
-            "therobotoverlord_api.auth.jwt_service.JWTService.decode_token_claims"
-        )
-        with patch(jwt_patch) as mock_decode:
-            # Mock JWT validation to pass
-            mock_decode.return_value = {"user_id": "test-user-id"}
-            middleware_patch = (
-                "therobotoverlord_api.auth.middleware."
-                "AuthenticationMiddleware._get_authenticated_user"
-            )
-            with patch(middleware_patch) as mock_get_user:
-                mock_get_user.return_value = AuthenticatedUser(
-                    user_id=uuid4(),
-                    role=UserRole.CITIZEN,
-                    permissions=[],
-                    session_id="test-session-id",
-                    token_version=1,
-                )
+        # Mock the dependency injection auth
+        with patch(
+            "therobotoverlord_api.auth.dependencies.get_current_user"
+        ) as mock_get_user:
+            # Create a mock user
+            mock_user = MagicMock()
+            mock_user.pk = uuid4()
+            mock_user.role = UserRole.CITIZEN
+            mock_user.is_banned = False
+            mock_get_user.return_value = mock_user
 
-                with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
-                    mock_auth_service = AsyncMock()
-                    mock_auth.return_value = mock_auth_service
+            with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
+                mock_auth_service = AsyncMock()
+                mock_auth.return_value = mock_auth_service
 
-                    # Mock successful token refresh
-                    mock_auth_service.refresh_tokens.return_value = MagicMock()
+                # Mock successful token refresh
+                mock_auth_service.refresh_tokens.return_value = MagicMock()
 
-                    with patch("therobotoverlord_api.api.auth._set_auth_cookies"):
-                        response = await authenticated_client.post(
-                            "/api/v1/auth/refresh"
-                        )
+                with patch("therobotoverlord_api.api.auth._set_auth_cookies"):
+                    response = await authenticated_client.post("/api/v1/auth/refresh")
 
-                        assert response.status_code == status.HTTP_200_OK
-                        data = response.json()
+                    assert response.status_code == status.HTTP_200_OK
+                    data = response.json()
 
-                        assert data["status"] == "ok"
-                        assert "message" in data["data"]
+                    assert data["status"] == "ok"
+                    assert "message" in data["data"]
 
     @pytest.mark.asyncio
     async def test_refresh_endpoint_no_token(self, async_client: AsyncClient):
@@ -131,33 +123,35 @@ class TestAuthAPIEndpoints:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
-    async def test_logout_endpoint_current_session(
-        self, authenticated_client: AsyncClient
-    ):
+    async def test_logout_endpoint_current_session(self, app):
         """Test logout current session."""
-        jwt_patch = (
-            "therobotoverlord_api.auth.jwt_service.JWTService.decode_token_claims"
-        )
-        with patch(jwt_patch) as mock_decode:
-            mock_decode.return_value = {"user_id": "test-user-id"}
-            middleware_patch = (
-                "therobotoverlord_api.auth.middleware."
-                "AuthenticationMiddleware._get_authenticated_user"
-            )
-            with patch(middleware_patch) as mock_get_user:
-                mock_get_user.return_value = AuthenticatedUser(
-                    user_id=uuid4(),
-                    role=UserRole.CITIZEN,
-                    permissions=[],
-                    session_id="test-session-id",
-                    token_version=1,
-                )
+        from therobotoverlord_api.auth.dependencies import get_current_user
+        from therobotoverlord_api.database.models.user import User
 
-                with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
-                    mock_auth_service = AsyncMock()
-                    mock_auth.return_value = mock_auth_service
+        test_user_id = uuid4()
 
-                    response = await authenticated_client.post(
+        # Create a mock user to return from dependency
+        mock_user = MagicMock(spec=User)
+        mock_user.pk = test_user_id
+        mock_user.id = test_user_id
+        mock_user.role = UserRole.CITIZEN
+        mock_user.is_banned = False
+
+        # Override the dependency
+        def override_get_current_user():
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        try:
+            with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
+                mock_auth_service = AsyncMock()
+                mock_auth.return_value = mock_auth_service
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    response = await client.post(
                         "/api/v1/auth/logout", json={"revoke_all_sessions": False}
                     )
 
@@ -166,35 +160,39 @@ class TestAuthAPIEndpoints:
 
                     assert data["status"] == "ok"
                     assert "message" in data["data"]
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_logout_endpoint_all_sessions(
-        self, authenticated_client: AsyncClient
-    ):
+    async def test_logout_endpoint_all_sessions(self, app):
         """Test logout all sessions."""
-        jwt_patch = (
-            "therobotoverlord_api.auth.jwt_service.JWTService.decode_token_claims"
-        )
-        with patch(jwt_patch) as mock_decode:
-            mock_decode.return_value = {"user_id": "test-user-id"}
-            middleware_patch = (
-                "therobotoverlord_api.auth.middleware."
-                "AuthenticationMiddleware._get_authenticated_user"
-            )
-            with patch(middleware_patch) as mock_get_user:
-                mock_get_user.return_value = AuthenticatedUser(
-                    user_id=uuid4(),
-                    role=UserRole.CITIZEN,
-                    permissions=[],
-                    session_id="test-session-id",
-                    token_version=1,
-                )
+        from therobotoverlord_api.auth.dependencies import get_current_user
+        from therobotoverlord_api.database.models.user import User
 
-                with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
-                    mock_auth_service = AsyncMock()
-                    mock_auth.return_value = mock_auth_service
+        test_user_id = uuid4()
 
-                    response = await authenticated_client.post(
+        # Create a mock user to return from dependency
+        mock_user = MagicMock(spec=User)
+        mock_user.pk = test_user_id
+        mock_user.id = test_user_id
+        mock_user.role = UserRole.CITIZEN
+        mock_user.is_banned = False
+
+        # Override the dependency
+        def override_get_current_user():
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        try:
+            with patch("therobotoverlord_api.api.auth.AuthService") as mock_auth:
+                mock_auth_service = AsyncMock()
+                mock_auth.return_value = mock_auth_service
+
+                async with AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    response = await client.post(
                         "/api/v1/auth/logout", json={"revoke_all_sessions": True}
                     )
 
@@ -203,53 +201,60 @@ class TestAuthAPIEndpoints:
 
                     assert data["status"] == "ok"
                     assert "message" in data["data"]
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_me_endpoint_authenticated(self, authenticated_client: AsyncClient):
+    async def test_me_endpoint_authenticated(self, app):
         """Test /me endpoint with authenticated user."""
-        jwt_patch = (
-            "therobotoverlord_api.auth.jwt_service.JWTService.decode_token_claims"
-        )
-        with patch(jwt_patch) as mock_decode:
-            mock_decode.return_value = {"user_id": "test-user-id"}
+        from therobotoverlord_api.auth.dependencies import get_current_user
+        from therobotoverlord_api.database.models.user import User
 
-            test_user_id = uuid4()
-            middleware_patch = (
-                "therobotoverlord_api.auth.middleware."
-                "AuthenticationMiddleware._get_authenticated_user"
+        test_user_id = uuid4()
+
+        # Create a mock user to return from dependency
+        mock_user = MagicMock(spec=User)
+        mock_user.pk = test_user_id
+        mock_user.id = test_user_id  # Auth service expects 'id' attribute
+        mock_user.role = UserRole.CITIZEN
+        mock_user.is_banned = False
+
+        # Override the dependency
+        def override_get_current_user():
+            return mock_user
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        try:
+            auth_service_patch = (
+                "therobotoverlord_api.api.auth.AuthService.get_user_info"
             )
-            with patch(middleware_patch) as mock_get_user:
-                mock_get_user.return_value = AuthenticatedUser(
-                    user_id=test_user_id,
-                    role=UserRole.CITIZEN,
-                    permissions=["read"],
-                    session_id="test-session-id",
-                    token_version=1,
-                )
+            with patch(auth_service_patch) as mock_get_info:
+                # Create a mock user object with the required attributes
+                mock_user_info = MagicMock()
+                mock_user_info.pk = test_user_id
+                mock_user_info.username = "testuser"
+                mock_user_info.email = "test@example.com"
+                mock_user_info.role = "citizen"
+                mock_user_info.loyalty_score = 100
+                mock_user_info.created_at = "2024-01-01T00:00:00Z"
+                mock_user_info.updated_at = "2024-01-01T00:00:00Z"
 
-                auth_service_patch = (
-                    "therobotoverlord_api.api.auth.AuthService.get_user_info"
-                )
-                with patch(auth_service_patch) as mock_get_info:
-                    # Create a mock user object with the required attributes
-                    mock_user = MagicMock()
-                    mock_user.pk = test_user_id
-                    mock_user.username = "testuser"
-                    mock_user.email = "test@example.com"
-                    mock_user.role = "citizen"
-                    mock_user.loyalty_score = 100
-                    mock_user.created_at = "2024-01-01T00:00:00Z"
-                    mock_user.updated_at = "2024-01-01T00:00:00Z"
+                mock_get_info.return_value = mock_user_info
 
-                    mock_get_info.return_value = mock_user
-
-                    response = await authenticated_client.get("/api/v1/auth/me")
+                async with AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    response = await client.get("/api/v1/auth/me")
 
                     assert response.status_code == status.HTTP_200_OK
                     data = response.json()
 
                     assert data["status"] == "ok"
                     assert "user_id" in data["data"]
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_me_endpoint_unauthorized(self, async_client: AsyncClient):

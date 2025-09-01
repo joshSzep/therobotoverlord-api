@@ -71,12 +71,11 @@ CREATE TABLE posts (
     last_edited_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-
-    -- TOS screening fields
-    tos_status VARCHAR(20) DEFAULT 'pending_review' CHECK (tos_status IN ('pending_review', 'approved', 'flagged', 'rejected')),
-    tos_reviewed_at TIMESTAMP WITH TIME ZONE,
-    tos_reviewed_by UUID REFERENCES users(pk),
-    tos_violation_reason TEXT,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('submitted', 'pending', 'in_transit', 'approved', 'rejected', 'tos_violation')),
+    overlord_feedback TEXT,
+    submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    approved_at TIMESTAMP WITH TIME ZONE,
+    rejection_reason TEXT,
 
     CONSTRAINT unique_post_number_per_topic UNIQUE(topic_pk, post_number)
 );
@@ -516,7 +515,7 @@ CREATE INDEX idx_posts_topic ON posts(topic_pk);
 CREATE INDEX idx_posts_author ON posts(author_pk);
 CREATE INDEX idx_posts_parent ON posts(parent_post_pk);
 CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
-CREATE INDEX idx_posts_tos_status ON posts(tos_status);
+CREATE INDEX idx_posts_status ON posts(status);
 
 CREATE INDEX idx_post_tos_queue_post ON post_tos_screening_queue(post_pk);
 CREATE INDEX idx_post_tos_queue_priority ON post_tos_screening_queue(priority DESC);
