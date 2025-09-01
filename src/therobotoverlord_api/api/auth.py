@@ -146,7 +146,7 @@ async def logout(
 
         if logout_data.revoke_all_sessions:
             # Revoke all user sessions
-            revoked_count = await auth_service.logout_all_sessions(current_user.id)
+            revoked_count = await auth_service.logout_all_sessions(current_user.pk)
             message = f"Logged out from {revoked_count} sessions"
         else:
             # Revoke current session only
@@ -182,7 +182,7 @@ async def get_current_user_info(
 ):
     """Get current authenticated user information."""
     auth_service = AuthService()
-    user = await auth_service.get_user_info(current_user.id)
+    user = await auth_service.get_user_info(current_user.pk)
 
     if not user:
         raise HTTPException(

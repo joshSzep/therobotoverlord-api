@@ -180,6 +180,19 @@ class AuthService:
 
         return await self.session_service.revoke_all_user_sessions(user_id)
 
+    async def logout_by_refresh_token(self, refresh_token: str) -> bool:
+        """Logout user by refresh token."""
+        if not refresh_token:
+            return False
+
+        # Extract session ID from refresh token
+        session_id = self.jwt_service.extract_session_id(refresh_token)
+        if not session_id:
+            return False
+
+        # Validate and revoke the session
+        return await self.logout(session_id)
+
     async def get_user_info(self, user_id: UUID) -> User | None:
         """Get user information by ID."""
         return await self.user_repository.get_by_pk(user_id)

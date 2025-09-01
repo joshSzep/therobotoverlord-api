@@ -76,7 +76,7 @@ def client(app):
 
 
 @pytest_asyncio.fixture
-def async_client(app):
+async def async_client(app):
     """Create an async test client with mocked dependencies."""
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 

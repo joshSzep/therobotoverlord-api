@@ -29,7 +29,11 @@ async def get_current_user(request: Request) -> User:
     try:
         # Validate token
         payload = jwt_service.decode_token(access_token)
-        user_id = payload.get("user_id")
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+        user_id = payload.sub
 
         if not user_id:
             raise HTTPException(
@@ -107,7 +111,9 @@ async def get_optional_user(request: Request) -> User | None:
     try:
         # Validate token
         payload = jwt_service.decode_token(access_token)
-        user_id = payload.get("user_id")
+        if not payload:
+            return None
+        user_id = payload.sub
 
         if not user_id:
             return None

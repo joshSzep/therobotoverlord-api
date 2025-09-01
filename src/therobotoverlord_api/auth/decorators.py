@@ -15,7 +15,7 @@ def public_endpoint(func: Callable[..., Any]) -> Callable[..., Any]:
         return await func(*args, **kwargs)
 
     # Mark the function as public
-    wrapper.__public_endpoint__ = True
+    wrapper.__public_endpoint__ = True  # type: ignore[attr-defined]
     return wrapper
 
 
@@ -27,7 +27,7 @@ def visitor_readable(func: Callable[..., Any]) -> Callable[..., Any]:
         return await func(*args, **kwargs)
 
     # Mark the function as visitor readable
-    wrapper.__visitor_readable__ = True
+    wrapper.__visitor_readable__ = True  # type: ignore[attr-defined]
     return wrapper
 
 
