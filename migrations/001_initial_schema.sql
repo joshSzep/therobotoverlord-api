@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- Create custom types
-CREATE TYPE content_type_enum AS ENUM ('topic', 'post', 'comment');
+CREATE TYPE content_type_enum AS ENUM ('topic', 'post', 'comment', 'private_message');
 
 -- Core users table with role-based access control
 CREATE TABLE users (
@@ -22,6 +22,7 @@ CREATE TABLE users (
     loyalty_score INTEGER DEFAULT 0,
     is_banned BOOLEAN DEFAULT FALSE,
     is_sanctioned BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
     email_verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -147,7 +148,7 @@ CREATE TABLE flags (
     flagged_content_pk UUID NOT NULL,
     flag_reason VARCHAR(100) NOT NULL,
     flag_description TEXT,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'reviewed', 'dismissed', 'upheld')) DEFAULT 'pending',
+    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'reviewed', 'dismissed', 'upheld', 'sustained')) DEFAULT 'pending',
     reviewed_by UUID REFERENCES users(pk),
     reviewed_at TIMESTAMP WITH TIME ZONE,
     review_notes TEXT,
@@ -208,7 +209,7 @@ CREATE TABLE topic_tags (
 CREATE TABLE sanctions (
     pk UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_pk UUID NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
-    sanction_type VARCHAR(50) NOT NULL CHECK (sanction_type IN ('warning', 'temporary_ban', 'permanent_ban', 'post_restriction', 'topic_restriction')),
+    sanction_type VARCHAR(50) NOT NULL CHECK (sanction_type IN ('warning', 'temporary_ban', 'permanent_ban', 'post_restriction', 'topic_restriction', 'posting_freeze', 'rate_limit')),
     severity VARCHAR(20) NOT NULL CHECK (severity IN ('minor', 'moderate', 'severe')) DEFAULT 'minor',
     applied_by_pk UUID REFERENCES users(pk),
     applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -227,7 +228,7 @@ CREATE TABLE appeals (
     flag_pk UUID REFERENCES flags(pk) ON DELETE CASCADE,
     appeal_type VARCHAR(50) NOT NULL CHECK (appeal_type IN ('sanction_appeal', 'flag_appeal', 'content_restoration')),
     appeal_reason TEXT NOT NULL,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'under_review', 'approved', 'denied')) DEFAULT 'pending',
+    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'under_review', 'approved', 'denied', 'sustained')) DEFAULT 'pending',
     reviewed_by UUID REFERENCES users(pk),
     review_notes TEXT,
     reviewed_at TIMESTAMP WITH TIME ZONE,
@@ -502,6 +503,7 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_loyalty_score ON users(loyalty_score DESC);
 CREATE INDEX idx_users_is_banned ON users(is_banned);
 CREATE INDEX idx_users_created_at ON users(created_at);
+CREATE INDEX idx_users_is_active ON users(is_active);
 
 CREATE INDEX idx_user_sessions_user_pk ON user_sessions(user_pk);
 CREATE INDEX idx_user_sessions_token ON user_sessions(session_token);
