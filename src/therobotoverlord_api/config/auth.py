@@ -60,4 +60,11 @@ class AuthSettings(BaseSettings):
 
 def get_auth_settings() -> AuthSettings:
     """Get authentication settings instance."""
-    return AuthSettings(google_client_id="", google_client_secret="", jwt_secret_key="")
+    from therobotoverlord_api.config.settings import get_settings
+
+    settings = get_settings()
+    return AuthSettings(
+        google_client_id=settings.auth.google_client_id,
+        google_client_secret=settings.auth.google_client_secret,
+        jwt_secret_key=settings.auth.jwt_secret_key,
+    )
