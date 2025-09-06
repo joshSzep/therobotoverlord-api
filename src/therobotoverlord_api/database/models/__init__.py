@@ -117,6 +117,9 @@ from therobotoverlord_api.database.models.user import UserCreate
 from therobotoverlord_api.database.models.user import UserLeaderboard
 from therobotoverlord_api.database.models.user import UserProfile
 from therobotoverlord_api.database.models.user import UserUpdate
+from therobotoverlord_api.database.models.user_session import UserSession
+from therobotoverlord_api.database.models.user_session import UserSessionCreate
+from therobotoverlord_api.database.models.user_session import UserSessionUpdate
 
 __all__ = [
     "AdminAction",
@@ -218,6 +221,9 @@ __all__ = [
     "UserLoyaltyProfile",
     "UserProfile",
     "UserRole",
+    "UserSession",
+    "UserSessionCreate",
+    "UserSessionUpdate",
     "UserSummary",
     "UserUpdate",
 ]

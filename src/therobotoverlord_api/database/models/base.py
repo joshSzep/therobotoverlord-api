@@ -59,21 +59,38 @@ class AppealStatus(str, Enum):
     """Appeal status enumeration."""
 
     PENDING = "pending"
-    SUSTAINED = "sustained"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
     DENIED = "denied"
+    SUSTAINED = "sustained"
 
 
 class FlagStatus(str, Enum):
     """Flag status enumeration."""
 
     PENDING = "pending"
-    SUSTAINED = "sustained"
+    REVIEWED = "reviewed"
     DISMISSED = "dismissed"
+    UPHELD = "upheld"
+    SUSTAINED = "sustained"
+
+
+class SanctionSeverity(str, Enum):
+    """Sanction severity enumeration."""
+
+    MINOR = "minor"
+    MODERATE = "moderate"
+    SEVERE = "severe"
 
 
 class SanctionType(str, Enum):
     """Sanction type enumeration."""
 
+    WARNING = "warning"
+    TEMPORARY_BAN = "temporary_ban"
+    PERMANENT_BAN = "permanent_ban"
+    POST_RESTRICTION = "post_restriction"
+    TOPIC_RESTRICTION = "topic_restriction"
     POSTING_FREEZE = "posting_freeze"
     RATE_LIMIT = "rate_limit"
 
@@ -83,6 +100,7 @@ class ContentType(str, Enum):
 
     TOPIC = "topic"
     POST = "post"
+    COMMENT = "comment"
     PRIVATE_MESSAGE = "private_message"
 
 

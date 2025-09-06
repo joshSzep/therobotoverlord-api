@@ -17,6 +17,10 @@ class Post(BaseDBModel):
     parent_post_pk: UUID | None = None
     author_pk: UUID
     content: str
+    post_number: int | None = None
+    is_edited: bool = False
+    edit_count: int = 0
+    last_edited_at: datetime | None = None
     status: ContentStatus = ContentStatus.PENDING
     overlord_feedback: str | None = None
     submitted_at: datetime
@@ -31,6 +35,7 @@ class PostCreate(BaseModel):
     parent_post_pk: UUID | None = None
     author_pk: UUID
     content: str
+    post_number: int | None = None
     submitted_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -40,6 +45,9 @@ class PostUpdate(BaseModel):
     """Post update model."""
 
     content: str | None = None
+    is_edited: bool | None = None
+    edit_count: int | None = None
+    last_edited_at: datetime | None = None
     status: ContentStatus | None = None
     overlord_feedback: str | None = None
     approved_at: datetime | None = None

@@ -336,10 +336,10 @@ class QueueOverviewRepository:
         """Get overview of all queue lengths and statistics."""
         query = """
             SELECT
-                (SELECT COUNT(*) FROM topic_creation_queue WHERE status = 'pending') as topic_creation_queue_length,
-                (SELECT COUNT(*) FROM post_tos_screening_queue WHERE status = 'pending') as post_tos_screening_queue_length,
-                (SELECT COUNT(*) FROM post_moderation_queue WHERE status = 'pending') as post_moderation_queue_length,
-                (SELECT COUNT(*) FROM private_message_queue WHERE status = 'pending') as private_message_queue_length,
+                (SELECT COUNT(*) FROM topic_creation_queue WHERE assigned_to IS NULL) as topic_creation_queue_length,
+                (SELECT COUNT(*) FROM post_tos_screening_queue WHERE assigned_to IS NULL) as post_tos_screening_queue_length,
+                (SELECT COUNT(*) FROM post_moderation_queue WHERE assigned_to IS NULL) as post_moderation_queue_length,
+                (SELECT COUNT(*) FROM private_message_queue WHERE assigned_to IS NULL) as private_message_queue_length,
                 NOW() as last_updated
         """
 
@@ -355,16 +355,32 @@ class QueueOverviewRepository:
             SELECT
                 'topic_creation' as queue_type,
                 tcq.pk,
-                tcq.topic_pk as content_pk,
+                tcq.title as content_pk,
                 'topic' as content_type,
-                tcq.priority_score,
-                tcq.position_in_queue,
-                tcq.status,
-                tcq.entered_queue_at,
-                tcq.worker_assigned_at,
-                tcq.worker_id
+                tcq.priority,
+                1 as position_in_queue,
+                'pending' as status,
+                tcq.created_at as entered_queue_at,
+                tcq.assigned_at as worker_assigned_at,
+                tcq.assigned_to as worker_id
             FROM topic_creation_queue tcq
-            WHERE tcq.status = 'pending'
+            WHERE tcq.assigned_to IS NULL
+
+            UNION ALL
+
+            SELECT
+                'post_tos_screening' as queue_type,
+                ptsq.pk,
+                ptsq.post_pk as content_pk,
+                'post' as content_type,
+                ptsq.priority,
+                1 as position_in_queue,
+                'pending' as status,
+                ptsq.created_at as entered_queue_at,
+                ptsq.assigned_at as worker_assigned_at,
+                ptsq.assigned_to as worker_id
+            FROM post_tos_screening_queue ptsq
+            WHERE ptsq.assigned_to IS NULL
 
             UNION ALL
 
@@ -373,14 +389,14 @@ class QueueOverviewRepository:
                 pmq.pk,
                 pmq.post_pk as content_pk,
                 'post' as content_type,
-                pmq.priority_score,
-                pmq.position_in_queue,
-                pmq.status,
-                pmq.entered_queue_at,
-                pmq.worker_assigned_at,
-                pmq.worker_id
+                pmq.priority,
+                1 as position_in_queue,
+                'pending' as status,
+                pmq.created_at as entered_queue_at,
+                pmq.assigned_at as worker_assigned_at,
+                pmq.assigned_to as worker_id
             FROM post_moderation_queue pmq
-            WHERE pmq.status = 'pending'
+            WHERE pmq.assigned_to IS NULL
 
             UNION ALL
 
@@ -389,16 +405,16 @@ class QueueOverviewRepository:
                 pmsgq.pk,
                 pmsgq.message_pk as content_pk,
                 'private_message' as content_type,
-                pmsgq.priority_score,
-                pmsgq.position_in_queue,
-                pmsgq.status,
-                pmsgq.entered_queue_at,
-                pmsgq.worker_assigned_at,
-                pmsgq.worker_id
+                pmsgq.priority,
+                1 as position_in_queue,
+                'pending' as status,
+                pmsgq.created_at as entered_queue_at,
+                pmsgq.assigned_at as worker_assigned_at,
+                pmsgq.assigned_to as worker_id
             FROM private_message_queue pmsgq
-            WHERE pmsgq.status = 'pending'
+            WHERE pmsgq.assigned_to IS NULL
 
-            ORDER BY priority_score ASC, entered_queue_at ASC
+            ORDER BY priority ASC, entered_queue_at ASC
             LIMIT $1
         """
 

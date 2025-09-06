@@ -13,20 +13,24 @@ from therobotoverlord_api.database.models.base import QueueStatus
 class BaseQueueModel(BaseDBModel):
     """Base queue model with common fields."""
 
-    priority_score: int
-    priority: int = 0
-    position_in_queue: int
+    priority: int = 1
+    priority_score: int = 1
     status: QueueStatus = QueueStatus.PENDING
-    entered_queue_at: datetime
-    estimated_completion_at: datetime | None = None
-    worker_assigned_at: datetime | None = None
+    position_in_queue: int | None = None
+    entered_queue_at: datetime | None = None
+    assigned_to: UUID | None = None
+    assigned_at: datetime | None = None
     worker_id: str | None = None
+    worker_assigned_at: datetime | None = None
 
 
 class TopicCreationQueue(BaseQueueModel):
     """Topic creation queue model."""
 
-    topic_pk: UUID
+    topic_pk: UUID | None = None
+    title: str | None = None
+    description: str | None = None
+    author_pk: UUID | None = None
 
 
 class PostTosScreeningQueue(BaseQueueModel):
@@ -34,6 +38,7 @@ class PostTosScreeningQueue(BaseQueueModel):
 
     post_pk: UUID
     topic_pk: UUID
+    worker_assigned_at: datetime | None = None
 
 
 class PostModerationQueue(BaseQueueModel):
@@ -47,19 +52,30 @@ class PrivateMessageQueue(BaseQueueModel):
     """Private message queue model."""
 
     message_pk: UUID
-    sender_pk: UUID
-    recipient_pk: UUID
-    conversation_id: str
+    conversation_id: str | None = None
+    sender_pk: UUID | None = None
+    recipient_pk: UUID | None = None
+
+
+class TopicCreationQueueDB(BaseQueueModel):
+    """Topic creation queue database model matching schema."""
+
+    title: str
+    description: str
+    author_pk: UUID
 
 
 class QueueItemCreate(BaseModel):
     """Base queue item creation model."""
 
-    priority_score: int
-    priority: int = 0
-    position_in_queue: int
-    entered_queue_at: datetime
-    estimated_completion_at: datetime | None = None
+    priority: int = 1
+    priority_score: int = 1
+    status: QueueStatus = QueueStatus.PENDING
+    position_in_queue: int | None = None
+    entered_queue_at: datetime | None = None
+    assigned_to: UUID | None = None
+    assigned_at: datetime | None = None
+    worker_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,14 +83,17 @@ class QueueItemCreate(BaseModel):
 class TopicCreationQueueCreate(QueueItemCreate):
     """Topic creation queue item creation model."""
 
-    topic_pk: UUID
+    topic_pk: UUID | None = None
+    title: str | None = None
+    description: str | None = None
+    author_pk: UUID | None = None
 
 
 class PostTosScreeningQueueCreate(QueueItemCreate):
     """Post ToS screening queue item creation model."""
 
     post_pk: UUID
-    topic_pk: UUID
+    topic_pk: UUID | None = None
 
 
 class PostModerationQueueCreate(QueueItemCreate):
@@ -88,21 +107,23 @@ class PrivateMessageQueueCreate(QueueItemCreate):
     """Private message queue item creation model."""
 
     message_pk: UUID
-    sender_pk: UUID
-    recipient_pk: UUID
-    conversation_id: str
+    conversation_id: str | None = None
+    sender_pk: UUID | None = None
+    recipient_pk: UUID | None = None
 
 
 class QueueItemUpdate(BaseModel):
     """Base queue item update model."""
 
-    priority_score: int | None = None
     priority: int | None = None
-    position_in_queue: int | None = None
+    priority_score: int | None = None
     status: QueueStatus | None = None
-    estimated_completion_at: datetime | None = None
-    worker_assigned_at: datetime | None = None
+    position_in_queue: int | None = None
+    entered_queue_at: datetime | None = None
+    assigned_to: UUID | None = None
+    assigned_at: datetime | None = None
     worker_id: str | None = None
+    worker_assigned_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

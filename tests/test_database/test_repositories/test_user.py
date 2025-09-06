@@ -149,7 +149,7 @@ class TestUserRepository:
             assert result[0].rank == 1
             assert result[1].rank == 2
 
-            expected_query = "\n            SELECT * FROM user_leaderboard\n            ORDER BY rank ASC\n            LIMIT $1\n        "
+            expected_query = "\n            SELECT * FROM leaderboard\n            ORDER BY rank ASC\n            LIMIT $1\n        "
             mock_connection.fetch.assert_called_once_with(expected_query, 50)
 
     @pytest.mark.asyncio
@@ -165,7 +165,7 @@ class TestUserRepository:
             result = await repository.get_user_rank(sample_user_pk)
 
             assert result == 5
-            expected_query = "\n            SELECT rank FROM user_leaderboard\n            WHERE user_pk = $1\n        "
+            expected_query = "\n            SELECT rank FROM leaderboard\n            WHERE user_pk = $1\n        "
             mock_connection.fetchval.assert_called_once_with(
                 expected_query, sample_user_pk
             )
@@ -437,7 +437,7 @@ class TestUserRepository:
 
             await repository.refresh_leaderboard()
 
-            expected_query = "REFRESH MATERIALIZED VIEW CONCURRENTLY user_leaderboard"
+            expected_query = "REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard"
             mock_connection.execute.assert_called_once_with(expected_query)
 
     @pytest.mark.asyncio

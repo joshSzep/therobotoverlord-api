@@ -48,30 +48,19 @@ class UserRepository(BaseRepository[User]):
     async def get_leaderboard(self, limit: int = 100) -> list[UserLeaderboard]:
         """Get user leaderboard from materialized view."""
         query = """
-            SELECT * FROM user_leaderboard
+            SELECT * FROM leaderboard
             ORDER BY rank ASC
             LIMIT $1
         """
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [
-                UserLeaderboard(
-                    user_pk=record["user_pk"],
-                    username=record["username"],
-                    loyalty_score=record["loyalty_score"],
-                    rank=record["rank"],
-                    can_create_topics=record["can_create_topics"],
-                    created_at=record["created_at"],
-                    updated_at=record["updated_at"],
-                )
-                for record in records
-            ]
+            return [UserLeaderboard.model_validate(record) for record in records]
 
     async def get_user_rank(self, user_pk: UUID) -> int | None:
         """Get a user's current rank."""
         query = """
-            SELECT rank FROM user_leaderboard
+            SELECT rank FROM leaderboard
             WHERE user_pk = $1
         """
 
@@ -141,7 +130,7 @@ class UserRepository(BaseRepository[User]):
 
     async def refresh_leaderboard(self) -> None:
         """Refresh the materialized leaderboard view."""
-        query = "REFRESH MATERIALIZED VIEW CONCURRENTLY user_leaderboard"
+        query = "REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard"
 
         async with get_db_connection() as connection:
             await connection.execute(query)
