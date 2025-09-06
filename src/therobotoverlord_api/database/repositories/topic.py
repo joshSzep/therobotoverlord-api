@@ -25,7 +25,7 @@ class TopicRepository(BaseRepository[Topic]):
 
     def _record_to_model(self, record: Record) -> Topic:
         """Convert database record to Topic model."""
-        return Topic.model_validate(record)
+        return Topic.model_validate(dict(record))
 
     async def create(self, topic_data: TopicCreate) -> Topic:
         """Create a new topic."""
@@ -116,14 +116,23 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_with_author(self, pk: UUID) -> TopicWithAuthor | None:
         """Get topic with author information."""
         query = """
             SELECT
-                t.*,
+                t.pk,
+                t.title,
+                t.description,
+                t.author_pk,
                 u.username as author_username,
+                t.created_by_overlord,
+                t.status,
+                t.approved_at,
+                t.approved_by,
+                t.created_at,
+                t.updated_at,
                 COALESCE(tag_names.tags, '{}') as tags
             FROM topics t
             LEFT JOIN users u ON t.author_pk = u.pk
@@ -140,7 +149,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             record = await connection.fetchrow(query, pk)
-            return TopicWithAuthor.model_validate(record) if record else None
+            return TopicWithAuthor.model_validate(dict(record)) if record else None
 
     async def get_by_author(
         self, author_pk: UUID, limit: int = 100, offset: int = 0
@@ -207,7 +216,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, search_pattern, limit, offset)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def approve_topic(self, pk: UUID, approved_by: UUID) -> Topic | None:
         """Approve a topic."""
@@ -266,7 +275,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_related_topics(
         self, topic_pk: UUID, limit: int = 5
@@ -314,7 +323,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, topic_pk, limit)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_all_categories(self) -> list[str]:
         """Get all unique topic categories/tags."""
@@ -437,7 +446,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_trending_topics(self, limit: int = 20) -> list[TopicSummary]:
         """Get trending topics based on recent post activity."""
@@ -482,7 +491,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_popular_topics(self, limit: int = 20) -> list[TopicSummary]:
         """Get popular topics based on total post count."""
@@ -520,7 +529,7 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]
 
     async def get_featured_topics(self, limit: int = 10) -> list[TopicSummary]:
         """Get featured topics (Overlord topics and highly active topics)."""
@@ -561,4 +570,4 @@ class TopicRepository(BaseRepository[Topic]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [TopicSummary.model_validate(record) for record in records]
+            return [TopicSummary.model_validate(dict(record)) for record in records]

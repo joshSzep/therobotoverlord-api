@@ -1,4 +1,8 @@
 
+# List available commands
+help:
+    @just --list
+
 # Run the complete backend system with Docker Compose
 run:
     @./scripts/run_docker.sh

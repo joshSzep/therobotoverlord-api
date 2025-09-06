@@ -25,7 +25,7 @@ class PostRepository(BaseRepository[Post]):
 
     def _record_to_model(self, record: Record) -> Post:
         """Convert database record to Post model."""
-        return Post.model_validate(record)
+        return Post.model_validate(dict(record))
 
     async def create(self, post_data: PostCreate) -> Post:
         """Create a new post."""
@@ -79,7 +79,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_graveyard_posts(
         self, limit: int = 100, offset: int = 0
@@ -109,7 +109,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_approved_by_topic(
         self, topic_pk: UUID, limit: int = 100, offset: int = 0
@@ -151,7 +151,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
-            return [PostSummary.model_validate(record) for record in records]
+            return [PostSummary.model_validate(dict(record)) for record in records]
 
     async def get_graveyard_by_author(
         self, author_pk: UUID, limit: int = 100, offset: int = 0
@@ -189,7 +189,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, author_pk, limit, offset)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_thread_view(
         self, topic_pk: UUID, limit: int = 100, offset: int = 0
@@ -250,7 +250,18 @@ class PostRepository(BaseRepository[Post]):
                 GROUP BY parent_post_pk
             )
             SELECT
-                pt.*,
+                pt.pk,
+                pt.topic_pk,
+                pt.parent_post_pk,
+                pt.author_pk,
+                pt.author_username,
+                pt.content,
+                pt.status,
+                pt.overlord_feedback,
+                pt.submitted_at,
+                pt.approved_at,
+                pt.created_at,
+                pt.depth_level,
                 COALESCE(prc.reply_count, 0) as reply_count
             FROM post_tree pt
             LEFT JOIN post_reply_counts prc ON pt.pk = prc.parent_post_pk
@@ -260,7 +271,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, topic_pk, limit, offset)
-            return [PostThread.model_validate(record) for record in records]
+            return [PostThread.model_validate(dict(record)) for record in records]
 
     async def get_by_status(
         self, status: ContentStatus, limit: int = 100, offset: int = 0
@@ -346,7 +357,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def search_posts(
         self,
@@ -389,7 +400,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, *params)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_in_transit_posts(
         self, limit: int = 100, offset: int = 0
@@ -419,7 +430,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_submitted_posts(
         self, limit: int = 50, offset: int = 0
@@ -449,7 +460,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit, offset)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_trending_posts(self, limit: int = 20) -> list[PostWithAuthor]:
         """Get trending posts based on recent activity and engagement."""
@@ -486,7 +497,7 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
 
     async def get_popular_posts(self, limit: int = 20) -> list[PostWithAuthor]:
         """Get popular posts based on total reply count."""
@@ -521,4 +532,4 @@ class PostRepository(BaseRepository[Post]):
 
         async with get_db_connection() as connection:
             records = await connection.fetch(query, limit)
-            return [PostWithAuthor.model_validate(record) for record in records]
+            return [PostWithAuthor.model_validate(dict(record)) for record in records]
