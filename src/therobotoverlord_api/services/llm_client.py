@@ -45,6 +45,31 @@ class ChatResponse(BaseModel):
     personality_consistency: float  # 0.0 to 1.0
 
 
+class TagGenerationResult(BaseModel):
+    """Structured output for tag generation."""
+
+    tags: list[str]
+    confidence: float  # 0.0 to 1.0
+    reasoning: str
+
+
+class TranslationDeps(BaseModel):
+    """Dependencies for translation agent."""
+
+    content: str
+    source_language: str | None = None
+    target_language: str = "en"
+    context: str | None = None
+
+
+class TagGenerationDeps(BaseModel):
+    """Dependencies for tag generation agent."""
+
+    content: str
+    content_type: str
+    timestamp: str
+
+
 class LLMClient:
     """Client for interacting with LLM models using pydantic-ai."""
 
@@ -232,7 +257,7 @@ Respond as The Robot Overlord would - with authority, intelligence, and belief i
         """Create models for each agent type with their specific configurations and providers."""
         models = {}
 
-        for agent_type in ["moderation", "tos", "chat", "translation"]:
+        for agent_type in ["moderation", "tos", "chat", "translation", "tagging"]:
             config = self.settings.llm.get_agent_config(agent_type)
 
             try:
@@ -325,6 +350,51 @@ Provide your screening decision in the required JSON format.""",
 
         return result.data
 
+    async def generate_tags(
+        self,
+        prompt: str,
+        content: str,
+        content_type: str = "topic",
+    ) -> list[str]:
+        """Generate tags for content using AI analysis."""
+        try:
+            # Create a tag generation agent without dependencies
+            tag_agent = Agent(
+                model=self.models["tagging"],
+                output_type=TagGenerationResult,
+            )
+
+            # Run tag generation with the full prompt
+            result = await tag_agent.run(
+                user_prompt=prompt,
+            )
+
+            # Extract tags from the AI response
+            if (
+                result
+                and result.output
+                and isinstance(result.output, TagGenerationResult)
+            ):
+                tags = result.output.tags
+                # Validate and clean tags
+                cleaned_tags = []
+                for tag in tags:
+                    if isinstance(tag, str) and tag.strip():
+                        # Normalize tag format: lowercase, replace spaces with hyphens
+                        normalized_tag = tag.strip().lower().replace(" ", "-")
+                        if normalized_tag not in cleaned_tags:
+                            cleaned_tags.append(normalized_tag)
+
+                # Limit to maximum 5 tags as per guidelines
+                return cleaned_tags[:5] if cleaned_tags else ["general"]
+
+            logger.warning("AI tag generation returned unexpected format")
+            return ["general"]
+        except Exception as e:
+            logger.error(f"Tag generation failed: {e}")
+            # Return fallback tags if AI generation fails
+            return ["general"]
+
     async def run_translation_agent(
         self, prompt: str, output_type: type, **kwargs
     ) -> Any:
@@ -332,13 +402,11 @@ Provide your screening decision in the required JSON format.""",
         # Create a temporary agent with the specified output type
         translation_agent = Agent(
             model=self.models["translation"],
-            deps_type=dict[str, Any],
             output_type=output_type,
         )
 
         result = await translation_agent.run(
             prompt,
-            deps=kwargs.get("deps", {}),
         )
 
         return result

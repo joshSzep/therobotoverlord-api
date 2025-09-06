@@ -8,7 +8,7 @@ from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.groq import GroqModel
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.bedrock import BedrockProvider
 from pydantic_ai.providers.google import GoogleProvider
@@ -90,7 +90,7 @@ class ProviderFactory:
                 return AnthropicModel(model_name=config.model, provider=provider)
 
             if provider_name == "openai":
-                return OpenAIModel(model_name=config.model, provider=provider)
+                return OpenAIResponsesModel(model_name=config.model, provider=provider)
 
             if provider_name == "google":
                 return GoogleModel(model_name=config.model, provider=provider)

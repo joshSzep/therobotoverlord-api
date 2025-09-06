@@ -170,14 +170,15 @@ async def get_topic_tags(
 async def assign_tags_to_topic(
     topic_id: UUID,
     tag_names: list[str],
-    current_user: Annotated[User, Depends(moderator_dependency)],
+    current_user: Annotated[User, Depends(admin_dependency)],
 ) -> list[TopicTag]:
-    """Assign multiple tags to a topic (moderators and above only)."""
+    """Override AI tag assignment (admins only - emergency use only)."""
     tag_service = get_tag_service()
 
     try:
         return await tag_service.assign_tags_to_topic(
-            topic_id, tag_names, current_user.pk
+            topic_id,
+            tag_names,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
@@ -187,9 +188,9 @@ async def assign_tags_to_topic(
 async def assign_tag_to_topic(
     topic_id: UUID,
     tag_id: UUID,
-    current_user: Annotated[User, Depends(moderator_dependency)],
+    current_user: Annotated[User, Depends(admin_dependency)],
 ) -> TopicTag:
-    """Assign a specific tag to a topic (moderators and above only)."""
+    """Override AI tag assignment for specific tag (admins only - emergency use only)."""
     tag_service = get_tag_service()
 
     try:
@@ -206,9 +207,9 @@ async def assign_tag_to_topic(
 async def remove_tag_from_topic(
     topic_id: UUID,
     tag_id: UUID,
-    current_user: Annotated[User, Depends(moderator_dependency)],
+    current_user: Annotated[User, Depends(admin_dependency)],
 ) -> dict[str, str]:
-    """Remove a tag from a topic (moderators and above only)."""
+    """Remove an AI-assigned tag from a topic (admins only - override use only)."""
     tag_service = get_tag_service()
 
     try:

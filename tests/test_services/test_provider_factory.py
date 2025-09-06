@@ -56,7 +56,7 @@ class TestProviderFactory:
         assert model == mock_model_instance
 
     @patch("therobotoverlord_api.services.provider_factory.OpenAIProvider")
-    @patch("therobotoverlord_api.services.provider_factory.OpenAIModel")
+    @patch("therobotoverlord_api.services.provider_factory.OpenAIResponsesModel")
     def test_create_openai_provider_and_model(self, mock_model, mock_provider):
         """Test creating OpenAI provider and model."""
         config = AgentModelConfig(

@@ -165,6 +165,20 @@ class LLMSettings(BaseModel):
         default=-1.0, description="Temperature for translation (uses default if -1)"
     )
 
+    # Tagging agent configuration
+    tagging_provider: str = Field(
+        default="", description="Provider for tagging agent (uses default if empty)"
+    )
+    tagging_model: str = Field(
+        default="", description="Model for tagging agent (uses default if empty)"
+    )
+    tagging_max_tokens: int = Field(
+        default=0, description="Max tokens for tagging (uses default if 0)"
+    )
+    tagging_temperature: float = Field(
+        default=0.0, description="Temperature for tagging (uses default if 0.0)"
+    )
+
     # General settings
     moderation_timeout: float = Field(
         default=30.0, description="Timeout for moderation requests in seconds"
@@ -232,6 +246,17 @@ class LLMSettings(BaseModel):
                 max_tokens=self.translation_max_tokens or self.max_tokens,
                 temperature=self.translation_temperature
                 if self.translation_temperature >= 0
+                else self.temperature,
+                api_key=self.get_provider_api_key(provider),
+            )
+        if agent_type == "tagging":
+            provider = self.tagging_provider or self.provider
+            return AgentModelConfig(
+                provider=provider,
+                model=self.tagging_model or self.model,
+                max_tokens=self.tagging_max_tokens or self.max_tokens,
+                temperature=self.tagging_temperature
+                if self.tagging_temperature >= 0
                 else self.temperature,
                 api_key=self.get_provider_api_key(provider),
             )

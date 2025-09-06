@@ -111,7 +111,9 @@ class TagService:
         return await self.topic_tag_repo.create(topic_tag_data)
 
     async def assign_tags_to_topic(
-        self, topic_pk: UUID, tag_names: list[str], assigned_by_pk: UUID
+        self,
+        topic_pk: UUID,
+        tag_names: list[str],
     ) -> list[TopicTag]:
         """Assign multiple tags to a topic by name."""
         # Verify topic exists
@@ -119,7 +121,7 @@ class TagService:
         if not topic:
             raise ValueError(f"Topic with PK {topic_pk} not found")
 
-        assigned_tags = []
+        assigned_tags: list[TopicTag] = []
 
         for tag_name in tag_names:
             # Get or create tag

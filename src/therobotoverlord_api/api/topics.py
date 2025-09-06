@@ -23,6 +23,7 @@ from therobotoverlord_api.database.models.topic import TopicSummary
 from therobotoverlord_api.database.models.topic import TopicWithAuthor
 from therobotoverlord_api.database.models.user import User
 from therobotoverlord_api.database.repositories.topic import TopicRepository
+from therobotoverlord_api.services.ai_tag_service import get_ai_tag_service
 from therobotoverlord_api.services.loyalty_score_service import (
     get_loyalty_score_service,
 )
@@ -267,6 +268,27 @@ async def approve_topic(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found"
         )
+
+    # Automatically assign tags via AI when topic is approved
+    try:
+        ai_tag_service = await get_ai_tag_service()
+        assigned_tags = await ai_tag_service.assign_tags_to_topic(
+            topic_id=topic.pk,
+            title=topic.title,
+            description=topic.description or "",
+        )
+        # Log successful tag assignment
+        if assigned_tags:
+            # Note: In a real implementation, you might want to log this
+            pass
+    except Exception as e:
+        # Don't fail topic approval if tag assignment fails
+        # The Overlord's judgment on content approval is more important
+        # Log the error for debugging purposes
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to assign tags to topic {topic_id}: {e}")
 
     # Record moderation approval event for loyalty scoring
     if topic.author_pk:

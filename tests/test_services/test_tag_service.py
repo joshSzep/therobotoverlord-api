@@ -508,7 +508,7 @@ class TestTagServiceErrorHandling:
         mock_topic_repo.get_by_pk.return_value = None
 
         with pytest.raises(ValueError, match="Topic with PK .* not found"):
-            await tag_service.assign_tags_to_topic(topic_pk, ["politics"], uuid4())
+            await tag_service.assign_tags_to_topic(topic_pk, ["politics"])
 
 
 class TestTagServiceIntegration:

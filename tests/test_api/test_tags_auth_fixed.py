@@ -246,7 +246,25 @@ class TestTagsAPIFixed:
     def test_assign_tag_to_topic_moderator(
         self, mock_get_service, client, test_app, mock_moderator
     ):
-        """Test POST /tags/topics/{topic_id}/tags/{tag_id} as moderator."""
+        """Test POST /tags/topics/{topic_id}/tags/{tag_id} as moderator (should fail - admin only)."""
+        mock_service = AsyncMock()
+        mock_get_service.return_value = mock_service
+
+        # Override the moderator dependency to return moderator user
+        test_app.dependency_overrides[moderator_dependency] = lambda: mock_moderator
+
+        topic_id = uuid4()
+        tag_id = uuid4()
+        response = client.post(f"/tags/topics/{topic_id}/tags/{tag_id}")
+
+        # Should fail because tag assignment now requires admin role
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @patch("therobotoverlord_api.api.tags.get_tag_service")
+    def test_assign_tag_to_topic_admin(
+        self, mock_get_service, client, test_app, mock_admin
+    ):
+        """Test POST /tags/topics/{topic_id}/tags/{tag_id} as admin (should succeed)."""
         mock_service = AsyncMock()
         mock_get_service.return_value = mock_service
 
@@ -254,13 +272,13 @@ class TestTagsAPIFixed:
             "pk": str(uuid4()),
             "topic_pk": str(uuid4()),
             "tag_pk": str(uuid4()),
-            "assigned_by_pk": str(mock_moderator.pk),
+            "assigned_by_pk": str(mock_admin.pk),
             "created_at": "2024-01-01T00:00:00Z",
         }
         mock_service.assign_tag_to_topic.return_value = topic_tag_mock
 
-        # Override the moderator dependency to return moderator user
-        test_app.dependency_overrides[moderator_dependency] = lambda: mock_moderator
+        # Override the admin dependency to return admin user
+        test_app.dependency_overrides[admin_dependency] = lambda: mock_admin
 
         topic_id = uuid4()
         tag_id = uuid4()
