@@ -35,7 +35,7 @@ class TestAppealRepository:
         return AppealCreate(
             content_type=ContentType.POST,
             content_pk=uuid4(),
-            appeal_type=AppealType.POST_REMOVAL,
+            appeal_type=AppealType.FLAG_APPEAL,
             reason="This post was removed unfairly",
             evidence="I have evidence that this was not spam",
         )
@@ -45,13 +45,13 @@ class TestAppealRepository:
         """Mock appeal database record."""
         return {
             "pk": uuid4(),
-            "appellant_pk": uuid4(),
-            "content_type": "post",
-            "content_pk": uuid4(),
-            "appeal_type": "post_removal",
-            "status": "pending",
-            "reason": "Test reason",
+            "user_pk": uuid4(),
+            "sanction_pk": None,
+            "flag_pk": uuid4(),
+            "appeal_type": "flag_appeal",
+            "appeal_reason": "Test reason",
             "evidence": "Test evidence",
+            "status": "pending",
             "reviewed_by": None,
             "review_notes": None,
             "submitted_at": datetime.now(UTC),
@@ -69,8 +69,8 @@ class TestAppealRepository:
 
         assert isinstance(appeal, Appeal)
         assert appeal.pk == mock_appeal_record["pk"]
-        assert appeal.appellant_pk == mock_appeal_record["appellant_pk"]
-        assert appeal.appeal_type == AppealType.POST_REMOVAL
+        assert appeal.user_pk == mock_appeal_record["user_pk"]
+        assert appeal.appeal_type == AppealType.FLAG_APPEAL
 
     @pytest.mark.asyncio
     @patch(
@@ -86,29 +86,28 @@ class TestAppealRepository:
         self, mock_create, mock_priority, mock_count, repository, mock_appeal_create
     ):
         """Test creating a new appeal."""
-        appellant_pk = uuid4()
+        user_pk = uuid4()
         mock_count.return_value = 2
         mock_priority.return_value = 75
         mock_appeal = Appeal(
             pk=uuid4(),
-            appellant_pk=appellant_pk,
-            content_type=ContentType.POST,
-            content_pk=mock_appeal_create.content_pk,
-            appeal_type=AppealType.POST_REMOVAL,
-            reason=mock_appeal_create.reason,
-            evidence=mock_appeal_create.evidence,
-            submitted_at=datetime.now(UTC),
-            previous_appeals_count=2,
-            priority_score=75,
+            user_pk=user_pk,
+            flag_pk=uuid4(),
+            appeal_type=AppealType.FLAG_APPEAL,
+            appeal_reason=mock_appeal_create.reason,
+            status=AppealStatus.PENDING,
+            reviewed_by=None,
+            review_notes=None,
+            reviewed_at=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
         mock_create.return_value = mock_appeal
 
-        result = await repository.create_appeal(mock_appeal_create, appellant_pk)
+        result = await repository.create_appeal(mock_appeal_create, user_pk)
 
-        mock_count.assert_called_once_with(appellant_pk)
-        mock_priority.assert_called_once_with(appellant_pk, AppealType.POST_REMOVAL)
+        mock_count.assert_called_once_with(user_pk)
+        mock_priority.assert_called_once_with(user_pk, AppealType.FLAG_APPEAL)
         mock_create.assert_called_once()
         assert result == mock_appeal
 
@@ -122,18 +121,17 @@ class TestAppealRepository:
         appeal_update = AppealUpdate(
             status=AppealStatus.UNDER_REVIEW,
             review_notes="Under review",
-            decision_reason="Decision pending",
         )
         mock_appeal = Appeal(
             pk=appeal_pk,
-            appellant_pk=uuid4(),
-            content_type=ContentType.POST,
-            content_pk=uuid4(),
-            appeal_type=AppealType.POST_REMOVAL,
-            reason="Test reason",
+            user_pk=uuid4(),
+            flag_pk=uuid4(),
+            appeal_type=AppealType.FLAG_APPEAL,
+            appeal_reason="Test reason",
             status=AppealStatus.UNDER_REVIEW,
+            reviewed_by=None,
             review_notes="Under review",
-            submitted_at=datetime.now(UTC),
+            reviewed_at=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -146,7 +144,6 @@ class TestAppealRepository:
             {
                 "status": "under_review",
                 "review_notes": "Under review",
-                "decision_reason": "Decision pending",
             },
         )
         assert result == mock_appeal
@@ -162,26 +159,25 @@ class TestAppealRepository:
         mock_records = [
             {
                 "pk": uuid4(),
-                "appellant_pk": user_pk,
-                "content_type": "post",
-                "content_pk": uuid4(),
-                "appeal_type": "post_removal",
+                "user_pk": user_pk,
+                "sanction_pk": None,
+                "flag_pk": uuid4(),
+                "appeal_type": "flag_appeal",
                 "status": "pending",
-                "reason": "Test reason",
-                "evidence": "Test evidence",
+                "appeal_reason": "Test reason",
                 "appellant_username": "testuser",
                 "reviewer_username": None,
-                "content_title": None,
-                "content_text": "Test post content",
-                "submitted_at": datetime.now(UTC),
                 "reviewed_at": None,
                 "reviewed_by": None,
                 "review_notes": None,
-                "decision_reason": None,
-                "previous_appeals_count": 0,
-                "priority_score": 50,
+                "restoration_completed": False,
+                "restoration_completed_at": None,
                 "created_at": datetime.now(UTC),
                 "updated_at": datetime.now(UTC),
+                "sanction_type": None,
+                "sanction_reason": None,
+                "flag_reason": "Inappropriate content",
+                "flagged_content_type": "post",
             }
         ]
         mock_connection.fetch.return_value = mock_records
@@ -207,26 +203,25 @@ class TestAppealRepository:
         mock_records = [
             {
                 "pk": uuid4(),
-                "appellant_pk": uuid4(),
-                "content_type": "post",
-                "content_pk": uuid4(),
-                "appeal_type": "post_removal",
+                "user_pk": uuid4(),
+                "sanction_pk": None,
+                "flag_pk": uuid4(),
+                "appeal_type": "flag_appeal",
                 "status": "pending",
-                "reason": "High priority appeal",
-                "evidence": None,
+                "appeal_reason": "High priority appeal",
                 "appellant_username": "user1",
                 "reviewer_username": None,
-                "content_title": None,
-                "content_text": "Test content",
-                "submitted_at": datetime.now(UTC),
                 "reviewed_at": None,
                 "reviewed_by": None,
                 "review_notes": None,
-                "decision_reason": None,
-                "previous_appeals_count": 0,
-                "priority_score": 100,
+                "restoration_completed": False,
+                "restoration_completed_at": None,
                 "created_at": datetime.now(UTC),
                 "updated_at": datetime.now(UTC),
+                "sanction_type": None,
+                "sanction_reason": None,
+                "flag_reason": "Inappropriate content",
+                "flagged_content_type": "post",
             }
         ]
         mock_connection.fetch.return_value = mock_records
@@ -237,7 +232,7 @@ class TestAppealRepository:
 
         assert len(result) == 1
         assert isinstance(result[0], AppealWithContent)
-        assert result[0].priority_score == 100
+        assert result[0].appeal_reason == "High priority appeal"
         mock_connection.fetch.assert_called_once()
 
     @pytest.mark.asyncio
@@ -419,7 +414,7 @@ class TestAppealRepository:
         }
 
         type_records = [
-            {"appeal_type": "post_removal", "count": 20},
+            {"appeal_type": "flag_appeal", "count": 20},
             {"appeal_type": "topic_rejection", "count": 10},
         ]
 
@@ -450,7 +445,7 @@ class TestAppealRepository:
         assert result.total_pending == 5
         assert result.total_under_review == 2
         assert result.average_review_time_hours == 24.5
-        assert result.appeals_by_type["post_removal"] == 20
+        assert result.appeals_by_type["flag_appeal"] == 20
         assert len(result.top_appellants) == 2
         assert len(result.reviewer_stats) == 1
 
@@ -464,7 +459,7 @@ class TestAppealRepository:
         result = await repository.count_user_appeals(user_pk, AppealStatus.PENDING)
 
         mock_count.assert_called_once_with(
-            "appellant_pk = $1 AND status = $2", [user_pk, "pending"]
+            "user_pk = $1 AND status = $2", [user_pk, "pending"]
         )
         assert result == 3
 
@@ -477,7 +472,7 @@ class TestAppealRepository:
 
         result = await repository.count_user_appeals(user_pk)
 
-        mock_count.assert_called_once_with("appellant_pk = $1", [user_pk])
+        mock_count.assert_called_once_with("user_pk = $1", [user_pk])
         assert result == 7
 
     @pytest.mark.asyncio
@@ -489,7 +484,7 @@ class TestAppealRepository:
 
         result = await repository._get_user_appeals_count(user_pk)
 
-        mock_count.assert_called_once_with("appellant_pk = $1", [user_pk])
+        mock_count.assert_called_once_with("user_pk = $1", [user_pk])
         assert result == 5
 
     @pytest.mark.asyncio
@@ -501,14 +496,15 @@ class TestAppealRepository:
         user_pk = uuid4()
         mock_connection = AsyncMock()
         mock_get_connection.return_value.__aenter__.return_value = mock_connection
-        mock_connection.fetchrow.return_value = {"loyalty_score": 500}  # High loyalty
-
+        mock_connection.fetchrow.return_value = {
+            "loyalty_score": 85
+        }  # Test with sanction appeal type
         result = await repository._calculate_priority_score(
-            user_pk, AppealType.SANCTION
+            user_pk, AppealType.CONTENT_RESTORATION
         )
 
-        # Base priority 100 * (1 + min(500/100, 5.0)) = 100 * 6 = 600
-        assert result == 600
+        # Base priority 75 * (1 + min(85/100, 5.0)) = 75 * 1.85 = 138.75 -> 138
+        assert result == 138
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.appeal.get_db_connection")
@@ -522,11 +518,11 @@ class TestAppealRepository:
         mock_connection.fetchrow.return_value = {"loyalty_score": 50}
 
         result = await repository._calculate_priority_score(
-            user_pk, AppealType.POST_REJECTION
+            user_pk, AppealType.CONTENT_RESTORATION
         )
 
-        # Base priority 25 * (1 + 50/100) = 25 * 1.5 = 37.5 -> 37
-        assert result == 37
+        # Base priority 75 * (1 + 50/100) = 75 * 1.5 = 112.5 -> 112
+        assert result == 112
 
     @pytest.mark.asyncio
     @patch("therobotoverlord_api.database.repositories.appeal.get_db_connection")
@@ -540,7 +536,7 @@ class TestAppealRepository:
         mock_connection.fetchrow.return_value = None  # User not found
 
         result = await repository._calculate_priority_score(
-            user_pk, AppealType.TOPIC_REJECTION
+            user_pk, AppealType.CONTENT_RESTORATION
         )
 
         # Base priority 75 * (1 + 0) = 75

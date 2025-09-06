@@ -57,18 +57,19 @@ class TestContentRestorationService:
     @pytest.fixture
     def sample_appeal(self):
         """Sample appeal for testing."""
-        return Appeal(
+        appeal = Appeal(
             pk=uuid4(),
-            content_pk=uuid4(),
-            content_type=ContentType.POST,
-            appellant_pk=uuid4(),
-            appeal_type=AppealType.POST_REMOVAL,
+            user_pk=uuid4(),
+            sanction_pk=None,
+            flag_pk=uuid4(),
+            appeal_type=AppealType.FLAG_APPEAL,
             status=AppealStatus.SUSTAINED,
-            reason="Content was incorrectly flagged",
+            appeal_reason="Content was incorrectly flagged",
             reviewed_by=uuid4(),
             created_at=datetime.now(UTC),
-            submitted_at=datetime.now(UTC),
+            updated_at=None,
         )
+        return appeal
 
     @pytest.mark.asyncio
     async def test_restore_content_without_edits(
@@ -83,7 +84,7 @@ class TestContentRestorationService:
         editor_pk = uuid4()
 
         mock_content = Mock()
-        mock_content.pk = sample_appeal.content_pk
+        mock_content.pk = sample_appeal.flag_pk
         mock_content.status = ContentStatus.REJECTED
         mock_content.content = "Original content"
         mock_content_repo.get_by_pk.return_value = mock_content
@@ -98,8 +99,8 @@ class TestContentRestorationService:
         mock_restoration_repo.create_from_dict.return_value = mock_restoration
 
         result = await service.restore_with_edits(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=editor_pk,
             edited_content=None,
@@ -110,7 +111,7 @@ class TestContentRestorationService:
         assert result.success is True
         assert result.content_edited is False
 
-        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.content_pk)
+        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.flag_pk)
         mock_content_repo.update.assert_called_once()
         mock_versioning_service.create_version.assert_called_once()
         mock_restoration_repo.create_from_dict.assert_called_once()
@@ -130,14 +131,14 @@ class TestContentRestorationService:
         edit_reason = "Fixed inappropriate language"
 
         mock_content = Mock()
-        mock_content.pk = sample_appeal.content_pk
+        mock_content.pk = sample_appeal.flag_pk
         mock_content.status = ContentStatus.REJECTED
         mock_content.content = "Original content"
         mock_content_repo.get_by_pk.return_value = mock_content
 
         # Mock the post repository update method to return a mock post object
         mock_updated_post = Mock()
-        mock_updated_post.pk = sample_appeal.content_pk
+        mock_updated_post.pk = sample_appeal.flag_pk
         service.post_repository.update.return_value = mock_updated_post
 
         # Create actual UUID for version mock
@@ -153,8 +154,8 @@ class TestContentRestorationService:
         mock_restoration_repo.create_from_dict.return_value = mock_restoration
 
         result = await service.restore_with_edits(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=editor_pk,
             edited_content=edited_content,
@@ -167,7 +168,7 @@ class TestContentRestorationService:
         assert result.version_pk == version_pk
         assert result.restoration_pk == restoration_pk
 
-        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.content_pk)
+        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.flag_pk)
         mock_versioning_service.create_version.assert_called_once()
         mock_restoration_repo.create_from_dict.assert_called_once()
         service.post_repository.update.assert_called_once()
@@ -182,8 +183,8 @@ class TestContentRestorationService:
         mock_content_repo.get_by_pk.return_value = None
 
         result = await service.restore_with_edits(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=editor_pk,
             edited_content=None,
@@ -192,9 +193,9 @@ class TestContentRestorationService:
 
         assert isinstance(result, RestorationResult)
         assert result.success is False
-        assert result.error_message == f"Content {sample_appeal.content_pk} not found"
+        assert result.error_message == f"Content {sample_appeal.flag_pk} not found"
 
-        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.content_pk)
+        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.flag_pk)
 
     @pytest.mark.asyncio
     async def test_restore_content_already_active(
@@ -204,7 +205,7 @@ class TestContentRestorationService:
         editor_pk = uuid4()
 
         mock_content = Mock()
-        mock_content.pk = sample_appeal.content_pk
+        mock_content.pk = sample_appeal.flag_pk
         mock_content.status = ContentStatus.APPROVED
         mock_content.content = "Some content"
         mock_content_repo.get_by_pk.return_value = mock_content
@@ -225,8 +226,8 @@ class TestContentRestorationService:
         service.post_repository.update.return_value = None
 
         result = await service.restore_with_edits(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=editor_pk,
             edited_content=None,
@@ -238,7 +239,7 @@ class TestContentRestorationService:
         assert result.error_message is not None
         assert "Failed to restore content" in result.error_message
 
-        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.content_pk)
+        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.flag_pk)
 
     @pytest.mark.asyncio
     async def test_restore_content_with_edit_reason_required(
@@ -249,7 +250,7 @@ class TestContentRestorationService:
         edited_content = {"content": "Edited content"}
 
         mock_content = Mock()
-        mock_content.pk = sample_appeal.content_pk
+        mock_content.pk = sample_appeal.flag_pk
         mock_content.status = ContentStatus.REJECTED
         mock_content.content = "Original content"
         mock_content_repo.get_by_pk.return_value = mock_content
@@ -268,12 +269,12 @@ class TestContentRestorationService:
 
         # Mock post repository update
         mock_updated_post = Mock()
-        mock_updated_post.pk = sample_appeal.content_pk
+        mock_updated_post.pk = sample_appeal.flag_pk
         service.post_repository.update.return_value = mock_updated_post
 
         result = await service.restore_with_edits(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=editor_pk,
             edited_content=edited_content,
@@ -286,4 +287,4 @@ class TestContentRestorationService:
         assert result.success is True
         assert result.content_edited is True
 
-        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.content_pk)
+        mock_content_repo.get_by_pk.assert_called_once_with(sample_appeal.flag_pk)

@@ -111,8 +111,8 @@ class TestPostModerationWorker:
             mock_repo.get_by_pk.assert_called_once_with(post_id)
 
     @pytest.mark.asyncio
-    async def test_process_post_rejection(self, mock_connection, sample_post_data):
-        """Test post rejection processing."""
+    async def test_process_sanction_appeal(self, mock_connection, sample_post_data):
+        """Test sanction appeal processing."""
         worker = PostModerationWorker()
         worker.db = mock_connection
 

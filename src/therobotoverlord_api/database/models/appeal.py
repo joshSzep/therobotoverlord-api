@@ -8,67 +8,49 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from therobotoverlord_api.database.models.base import AppealStatus
 from therobotoverlord_api.database.models.base import BaseDBModel
 from therobotoverlord_api.database.models.base import ContentType
 
 
-class AppealStatus(str, Enum):
-    """Appeal status enumeration."""
-
-    PENDING = "pending"
-    UNDER_REVIEW = "under_review"
-    SUSTAINED = "sustained"  # Appeal granted, original decision overturned
-    DENIED = "denied"  # Appeal rejected, original decision upheld
-    WITHDRAWN = "withdrawn"  # User withdrew the appeal
-
-
 class AppealType(str, Enum):
-    """Type of content being appealed."""
+    """Appeal type enum matching database schema."""
 
-    TOPIC_REJECTION = "topic_rejection"
-    POST_REJECTION = "post_rejection"
-    POST_REMOVAL = "post_removal"
-    PRIVATE_MESSAGE_REJECTION = "private_message_rejection"
-    SANCTION = "sanction"
+    SANCTION_APPEAL = "sanction_appeal"
+    FLAG_APPEAL = "flag_appeal"
+    CONTENT_RESTORATION = "content_restoration"
 
 
 class Appeal(BaseDBModel):
-    """Appeal database model."""
+    """Appeal database model matching schema."""
 
-    appellant_pk: UUID  # User making the appeal
-    content_type: ContentType  # TOPIC, POST, PRIVATE_MESSAGE
-    content_pk: UUID  # ID of the appealed content
+    user_pk: UUID  # User making the appeal (matches DB schema)
+    sanction_pk: UUID | None = None  # References sanctions table
+    flag_pk: UUID | None = None  # References flags table
     appeal_type: AppealType
+    appeal_reason: str  # User's reason for appeal (matches DB column name)
     status: AppealStatus = AppealStatus.PENDING
 
-    # Appeal details
-    reason: str  # User's reason for appeal
-    evidence: str | None = None  # Additional evidence/context
-
     # Review details
-    reviewed_by: UUID | None = None  # Moderator/admin who reviewed
-    review_notes: str | None = None  # Internal review notes
-    decision_reason: str | None = None  # Reason for sustain/deny decision
-
-    # Timestamps
-    submitted_at: datetime
+    reviewed_by: UUID | None = None
+    review_notes: str | None = None
     reviewed_at: datetime | None = None
 
-    # Rate limiting
-    previous_appeals_count: int = 0  # Number of previous appeals by this user
-
-    # Priority scoring (based on user loyalty score)
-    priority_score: int = 0
+    # Content restoration fields
+    restoration_completed: bool = False
+    restoration_completed_at: datetime | None = None
+    restoration_metadata: dict | None = None
 
 
 class AppealCreate(BaseModel):
     """Appeal creation model."""
 
-    content_type: ContentType
-    content_pk: UUID
+    # Legacy fields for backward compatibility with tests
+    content_type: ContentType | None = None
+    content_pk: UUID | None = None
     appeal_type: AppealType
     reason: str = Field(..., min_length=20, max_length=1000)
-    evidence: str | None = Field(None, max_length=2000)
+    evidence: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,8 +61,10 @@ class AppealUpdate(BaseModel):
     status: AppealStatus | None = None
     reviewed_by: UUID | None = None
     review_notes: str | None = Field(None, max_length=1000)
-    decision_reason: str | None = Field(None, max_length=1000)
     reviewed_at: datetime | None = None
+    restoration_completed: bool | None = None
+    restoration_completed_at: datetime | None = None
+    restoration_metadata: dict | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,7 +72,6 @@ class AppealUpdate(BaseModel):
 class AppealDecision(BaseModel):
     """Appeal decision model for moderator actions."""
 
-    decision_reason: str = Field(..., min_length=10, max_length=1000)
     review_notes: str | None = Field(None, max_length=1000)
 
     model_config = ConfigDict(from_attributes=True)
@@ -98,27 +81,27 @@ class AppealWithContent(BaseModel):
     """Appeal with associated content information."""
 
     pk: UUID
-    appellant_pk: UUID
+    user_pk: UUID
     appellant_username: str
-    content_type: ContentType
-    content_pk: UUID
+    sanction_pk: UUID | None
+    flag_pk: UUID | None
     appeal_type: AppealType
     status: AppealStatus
-    reason: str
-    evidence: str | None
+    appeal_reason: str
     reviewed_by: UUID | None
     reviewer_username: str | None
     review_notes: str | None
-    decision_reason: str | None
-    submitted_at: datetime
     reviewed_at: datetime | None
-    priority_score: int
+    restoration_completed: bool
+    restoration_completed_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
 
-    # Content details
-    content_title: str | None = None  # For topics
-    content_text: str | None = None  # Truncated content
+    # Associated content details
+    sanction_type: str | None = None  # If appealing a sanction
+    sanction_reason: str | None = None
+    flag_reason: str | None = None  # If appealing a flag
+    flagged_content_type: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

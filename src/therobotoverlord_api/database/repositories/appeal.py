@@ -13,10 +13,10 @@ from therobotoverlord_api.database.models.appeal import AppealCreate
 from therobotoverlord_api.database.models.appeal import AppealEligibility
 from therobotoverlord_api.database.models.appeal import AppealRateLimits
 from therobotoverlord_api.database.models.appeal import AppealStats
-from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealType
 from therobotoverlord_api.database.models.appeal import AppealUpdate
 from therobotoverlord_api.database.models.appeal import AppealWithContent
+from therobotoverlord_api.database.models.base import AppealStatus
 from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.repositories.base import BaseRepository
 
@@ -31,30 +31,32 @@ class AppealRepository(BaseRepository[Appeal]):
         """Convert database record to Appeal model."""
         return Appeal.model_validate(record)
 
-    async def create_appeal(
-        self, appeal_data: AppealCreate, appellant_pk: UUID
-    ) -> Appeal:
+    async def create_appeal(self, appeal_data: AppealCreate, user_pk: UUID) -> Appeal:
         """Create a new appeal."""
-        now = datetime.now(UTC)
+        # Determine sanction_pk and flag_pk based on content_type and content_pk
+        sanction_pk = None
+        flag_pk = None
 
-        # Calculate previous appeals count for this user
-        previous_count = await self._get_user_appeals_count(appellant_pk)
-
-        # Calculate priority score based on appeal type and user loyalty
-        priority_score = await self._calculate_priority_score(
-            appellant_pk, appeal_data.appeal_type
-        )
+        if appeal_data.content_type == ContentType.POST and appeal_data.content_pk:
+            if appeal_data.appeal_type == AppealType.SANCTION_APPEAL:
+                sanction_pk = appeal_data.content_pk
+            else:
+                flag_pk = appeal_data.content_pk
 
         data = {
-            "appellant_pk": appellant_pk,
-            "content_type": appeal_data.content_type.value,
-            "content_pk": appeal_data.content_pk,
+            "user_pk": user_pk,
+            "sanction_pk": sanction_pk,
+            "flag_pk": flag_pk,
             "appeal_type": appeal_data.appeal_type.value,
-            "reason": appeal_data.reason,
+            "appeal_reason": appeal_data.reason,
             "evidence": appeal_data.evidence,
-            "submitted_at": now,
-            "previous_appeals_count": previous_count,
-            "priority_score": priority_score,
+            "status": "pending",
+            "submitted_at": datetime.now(UTC),
+            "previous_appeals_count": await self._get_user_appeals_count(user_pk),
+            "priority_score": await self._calculate_priority_score(
+                user_pk,
+                appeal_data.appeal_type,
+            ),
         }
 
         return await self.create_from_dict(data)
@@ -74,7 +76,7 @@ class AppealRepository(BaseRepository[Appeal]):
         offset: int = 0,
     ) -> list[AppealWithContent]:
         """Get appeals for a specific user with content details."""
-        where_conditions = ["a.appellant_pk = $1"]
+        where_conditions = ["a.user_pk = $1"]
         params: list[str | UUID | int] = [user_pk]
         param_count = 2
 
@@ -391,13 +393,13 @@ class AppealRepository(BaseRepository[Appeal]):
         """Count appeals for a user."""
         if status:
             return await self.count(
-                "appellant_pk = $1 AND status = $2", [user_pk, status.value]
+                "user_pk = $1 AND status = $2", [user_pk, status.value]
             )
-        return await self.count("appellant_pk = $1", [user_pk])
+        return await self.count("user_pk = $1", [user_pk])
 
     async def _get_user_appeals_count(self, user_pk: UUID) -> int:
         """Get total number of appeals submitted by user."""
-        return await self.count("appellant_pk = $1", [user_pk])
+        return await self.count("user_pk = $1", [user_pk])
 
     async def _calculate_priority_score(
         self, user_pk: UUID, appeal_type: AppealType
@@ -412,11 +414,9 @@ class AppealRepository(BaseRepository[Appeal]):
 
         # Base priority by appeal type
         base_priority = {
-            AppealType.SANCTION: 100,
-            AppealType.TOPIC_REJECTION: 75,
-            AppealType.POST_REMOVAL: 50,
-            AppealType.POST_REJECTION: 25,
-            AppealType.PRIVATE_MESSAGE_REJECTION: 10,
+            AppealType.SANCTION_APPEAL: 100,
+            AppealType.CONTENT_RESTORATION: 75,
+            AppealType.FLAG_APPEAL: 50,
         }
 
         # Loyalty multiplier (capped at 5x)

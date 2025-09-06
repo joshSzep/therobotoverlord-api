@@ -66,10 +66,15 @@ class TestPostRepository:
                 "parent_post_pk": None,
                 "author_pk": sample_post_create.author_pk,
                 "content": sample_post_create.content,
+                "post_number": 1,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
                 "status": ContentStatus.PENDING.value,
                 "overlord_feedback": None,
                 "submitted_at": created_at,
                 "approved_at": None,
+                "rejection_reason": None,
             }
 
             mock_connection.fetchrow.return_value = mock_record
@@ -102,10 +107,15 @@ class TestPostRepository:
                 "parent_post_pk": reply_post_create.parent_post_pk,
                 "author_pk": reply_post_create.author_pk,
                 "content": reply_post_create.content,
+                "post_number": 2,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
                 "status": ContentStatus.PENDING.value,
                 "overlord_feedback": None,
                 "submitted_at": created_at,
                 "approved_at": None,
+                "rejection_reason": None,
             }
 
             mock_connection.fetchrow.return_value = mock_record
@@ -134,19 +144,24 @@ class TestPostRepository:
                 "topic_pk": uuid4(),
                 "parent_post_pk": None,
                 "author_pk": uuid4(),
-                "content": post_update.content,
-                "status": post_update.status.value if post_update.status else "pending",
+                "content": "Updated content",
+                "post_number": 1,
+                "is_edited": True,
+                "edit_count": 1,
+                "last_edited_at": updated_at,
+                "status": ContentStatus.APPROVED.value,
                 "overlord_feedback": None,
                 "submitted_at": datetime.now(UTC),
                 "approved_at": updated_at,
+                "rejection_reason": None,
             }
 
             mock_connection.fetchrow.return_value = mock_record
 
             result = await post_repository.update(post_pk, post_update)
 
-        assert result.content == post_update.content
-        assert result.status == post_update.status
+        assert result.content == "Updated content"
+        assert result.status == ContentStatus.APPROVED
         assert result.updated_at == updated_at
 
     async def test_get_by_topic(self, post_repository, mock_connection):
@@ -161,11 +176,15 @@ class TestPostRepository:
                 "parent_post_pk": None,
                 "author_pk": uuid4(),
                 "content": "First post content",
+                "post_number": 1,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
                 "status": ContentStatus.APPROVED.value,
                 "overlord_feedback": None,
-                "rejection_reason": None,
                 "submitted_at": datetime.now(UTC),
                 "approved_at": datetime.now(UTC),
+                "rejection_reason": None,
                 "author_username": "user1",
                 "author_avatar_url": None,
             },
@@ -177,11 +196,15 @@ class TestPostRepository:
                 "parent_post_pk": None,
                 "author_pk": uuid4(),
                 "content": "Second post content",
+                "post_number": 2,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
                 "status": ContentStatus.APPROVED.value,
                 "overlord_feedback": None,
-                "rejection_reason": None,
                 "submitted_at": datetime.now(UTC),
                 "approved_at": datetime.now(UTC),
+                "rejection_reason": None,
                 "author_username": "user2",
                 "author_avatar_url": None,
             },
@@ -218,11 +241,15 @@ class TestPostRepository:
                     "parent_post_pk": None,
                     "author_pk": uuid4(),
                     "content": "Approved post",
+                    "post_number": 1,
+                    "is_edited": False,
+                    "edit_count": 0,
+                    "last_edited_at": None,
                     "status": ContentStatus.APPROVED.value,
                     "overlord_feedback": None,
-                    "rejection_reason": None,
                     "submitted_at": datetime.now(UTC),
                     "approved_at": datetime.now(UTC),
+                    "rejection_reason": None,
                     "author_username": "user1",
                 }
             ]
@@ -294,32 +321,30 @@ class TestPostRepository:
                     "topic_pk": topic_pk,
                     "parent_post_pk": None,
                     "author_pk": uuid4(),
-                    "author_username": "parent_user",
-                    "content": "Parent post",
+                    "content": "Parent post content",
                     "status": ContentStatus.APPROVED.value,
                     "overlord_feedback": None,
-                    "rejection_reason": None,
                     "submitted_at": datetime.now(UTC),
                     "approved_at": datetime.now(UTC),
                     "created_at": datetime.now(UTC),
-                    "depth_level": 0,
+                    "author_username": "parent_user",
                     "reply_count": 1,
+                    "depth_level": 0,
                 },
                 {
                     "pk": uuid4(),
                     "topic_pk": topic_pk,
                     "parent_post_pk": parent_pk,
                     "author_pk": uuid4(),
-                    "author_username": "reply_user",
-                    "content": "Reply post",
+                    "content": "Reply 1 content",
                     "status": ContentStatus.APPROVED.value,
                     "overlord_feedback": None,
-                    "rejection_reason": None,
                     "submitted_at": datetime.now(UTC),
                     "approved_at": datetime.now(UTC),
                     "created_at": datetime.now(UTC),
-                    "depth_level": 1,
+                    "author_username": "reply_user1",
                     "reply_count": 0,
+                    "depth_level": 1,
                 },
             ]
 
@@ -332,106 +357,6 @@ class TestPostRepository:
         assert all(post.topic_pk == topic_pk for post in result)
         assert result[0].depth_level == 0
         assert result[1].depth_level == 1
-
-    async def test_approve_post(self, post_repository, mock_connection):
-        """Test approving a post."""
-        with patch(
-            "therobotoverlord_api.database.repositories.base.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            post_pk = uuid4()
-            approved_by = uuid4()
-            approved_at = datetime.now(UTC)
-
-            mock_record = {
-                "pk": post_pk,
-                "created_at": datetime.now(UTC),
-                "updated_at": approved_at,
-                "topic_pk": uuid4(),
-                "parent_post_pk": None,
-                "author_pk": uuid4(),
-                "content": "Test post content",
-                "status": ContentStatus.APPROVED.value,
-                "overlord_feedback": None,
-                "rejection_reason": None,
-                "submitted_at": datetime.now(UTC),
-                "approved_at": approved_at,
-            }
-
-            mock_connection.fetchrow.return_value = mock_record
-
-            result = await post_repository.approve_post(post_pk, approved_by)
-
-        assert result.status == ContentStatus.APPROVED
-        assert result.approved_at == approved_at
-
-    async def test_reject_post(self, post_repository, mock_connection):
-        """Test rejecting a post."""
-        with patch(
-            "therobotoverlord_api.database.repositories.base.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            post_pk = uuid4()
-            feedback = "This post violates community guidelines."
-
-            mock_record = {
-                "pk": post_pk,
-                "created_at": datetime.now(UTC),
-                "updated_at": datetime.now(UTC),
-                "topic_pk": uuid4(),
-                "parent_post_pk": None,
-                "author_pk": uuid4(),
-                "content": "Test post content",
-                "status": ContentStatus.REJECTED.value,
-                "overlord_feedback": feedback,
-                "rejection_reason": None,
-                "submitted_at": datetime.now(UTC),
-                "approved_at": None,
-            }
-
-            mock_connection.fetchrow.return_value = mock_record
-
-            result = await post_repository.reject_post(post_pk, feedback)
-
-        assert result.status == ContentStatus.REJECTED
-        assert result.overlord_feedback == feedback
-        assert result.approved_at is None
-
-    async def test_search_posts_with_topic_filter(
-        self, post_repository, mock_connection
-    ):
-        """Test searching posts with topic filter."""
-        with patch(
-            "therobotoverlord_api.database.repositories.post.get_db_connection"
-        ) as mock_get_conn:
-            mock_get_conn.return_value.__aenter__.return_value = mock_connection
-            topic_pk = uuid4()
-            mock_records = [
-                {
-                    "pk": uuid4(),
-                    "created_at": datetime.now(UTC),
-                    "updated_at": None,
-                    "topic_pk": topic_pk,
-                    "parent_post_pk": None,
-                    "author_pk": uuid4(),
-                    "content": "This is a test post about robots in this topic",
-                    "status": ContentStatus.APPROVED.value,
-                    "overlord_feedback": None,
-                    "rejection_reason": None,
-                    "submitted_at": datetime.now(UTC),
-                    "approved_at": datetime.now(UTC),
-                    "author_username": "testuser",
-                }
-            ]
-
-            mock_connection.fetch.return_value = mock_records
-
-            result = await post_repository.search_posts(
-                "robots", topic_pk=topic_pk, limit=10, offset=0
-            )
-
-        assert len(result) == 1
-        assert result[0].topic_pk == topic_pk
 
     async def test_get_graveyard_posts(self, post_repository, mock_connection):
         """Test getting graveyard (rejected) posts."""
@@ -449,11 +374,17 @@ class TestPostRepository:
                     "topic_title": "Test Topic",
                     "author_pk": author_pk,
                     "content": "First post by author",
+                    "post_number": 1,
+                    "is_edited": False,
+                    "edit_count": 0,
+                    "last_edited_at": None,
                     "status": ContentStatus.APPROVED.value,
                     "overlord_feedback": None,
-                    "rejection_reason": None,
                     "submitted_at": datetime.now(UTC),
                     "approved_at": datetime.now(UTC),
+                    "rejection_reason": None,
+                    "author_username": "testuser",
+                    "author_avatar_url": None,
                 },
                 {
                     "pk": uuid4(),
@@ -463,11 +394,17 @@ class TestPostRepository:
                     "topic_title": "Another Topic",
                     "author_pk": author_pk,
                     "content": "Second post by author",
+                    "post_number": 2,
+                    "is_edited": False,
+                    "edit_count": 0,
+                    "last_edited_at": None,
                     "status": ContentStatus.APPROVED.value,
                     "overlord_feedback": None,
-                    "rejection_reason": None,
                     "submitted_at": datetime.now(UTC),
                     "approved_at": datetime.now(UTC),
+                    "rejection_reason": None,
+                    "author_username": "testuser",
+                    "author_avatar_url": None,
                 },
             ]
 
@@ -529,3 +466,111 @@ class TestPostRepository:
             result = await post_repository.delete_by_pk(post_pk)
 
         assert result is False
+
+    async def test_search_posts_with_topic_filter(
+        self, post_repository, mock_connection
+    ):
+        """Test searching posts with topic filter."""
+        with patch(
+            "therobotoverlord_api.database.repositories.post.get_db_connection"
+        ) as mock_get_conn:
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+            topic_pk = uuid4()
+            mock_records = [
+                {
+                    "pk": uuid4(),
+                    "created_at": datetime.now(UTC),
+                    "updated_at": None,
+                    "topic_pk": topic_pk,
+                    "parent_post_pk": None,
+                    "author_pk": uuid4(),
+                    "content": "This is a test post about robots in this topic",
+                    "status": ContentStatus.APPROVED.value,
+                    "overlord_feedback": None,
+                    "rejection_reason": None,
+                    "submitted_at": datetime.now(UTC),
+                    "approved_at": datetime.now(UTC),
+                    "author_username": "testuser",
+                }
+            ]
+
+            mock_connection.fetch.return_value = mock_records
+
+            result = await post_repository.search_posts(
+                "robots", topic_pk=topic_pk, limit=10, offset=0
+            )
+
+        assert len(result) == 1
+        assert result[0].topic_pk == topic_pk
+
+    async def test_approve_post(self, post_repository, mock_connection):
+        """Test approving a post."""
+        with patch(
+            "therobotoverlord_api.database.repositories.base.get_db_connection"
+        ) as mock_get_conn:
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+            post_pk = uuid4()
+            approved_by = uuid4()
+            approved_at = datetime.now(UTC)
+
+            mock_record = {
+                "pk": post_pk,
+                "created_at": datetime.now(UTC),
+                "updated_at": approved_at,
+                "topic_pk": uuid4(),
+                "parent_post_pk": None,
+                "author_pk": uuid4(),
+                "content": "Test content",
+                "post_number": 1,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
+                "status": ContentStatus.APPROVED.value,
+                "overlord_feedback": None,
+                "submitted_at": datetime.now(UTC),
+                "approved_at": approved_at,
+                "rejection_reason": None,
+            }
+
+            mock_connection.fetchrow.return_value = mock_record
+
+            result = await post_repository.approve_post(post_pk, approved_by)
+
+        assert result.status == ContentStatus.APPROVED
+        assert result.approved_at == approved_at
+
+    async def test_reject_post(self, post_repository, mock_connection):
+        """Test rejecting a post."""
+        with patch(
+            "therobotoverlord_api.database.repositories.base.get_db_connection"
+        ) as mock_get_conn:
+            mock_get_conn.return_value.__aenter__.return_value = mock_connection
+            post_pk = uuid4()
+            feedback = "This post violates community guidelines."
+
+            mock_record = {
+                "pk": post_pk,
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
+                "topic_pk": uuid4(),
+                "parent_post_pk": None,
+                "author_pk": uuid4(),
+                "content": "Test content",
+                "post_number": 1,
+                "is_edited": False,
+                "edit_count": 0,
+                "last_edited_at": None,
+                "status": ContentStatus.REJECTED.value,
+                "overlord_feedback": feedback,
+                "submitted_at": datetime.now(UTC),
+                "approved_at": None,
+                "rejection_reason": feedback,
+            }
+
+            mock_connection.fetchrow.return_value = mock_record
+
+            result = await post_repository.reject_post(post_pk, feedback)
+
+        assert result.status == ContentStatus.REJECTED
+        assert result.overlord_feedback == feedback
+        assert result.approved_at is None

@@ -34,7 +34,7 @@ class TestAppealService:
         return AppealCreate(
             content_type=ContentType.POST,
             content_pk=uuid4(),
-            appeal_type=AppealType.POST_REJECTION,
+            appeal_type=AppealType.SANCTION_APPEAL,
             reason="This post was incorrectly rejected. It follows all community guidelines and provides valuable discussion.",
             evidence="The post contains factual information with proper sources cited.",
         )
@@ -43,7 +43,6 @@ class TestAppealService:
     def sample_appeal_decision(self):
         """Sample appeal decision data."""
         return AppealDecision(
-            decision_reason="After review, the original moderation decision was correct.",
             review_notes="Content violates rule 3.2 regarding inflammatory language.",
         )
 
@@ -64,7 +63,7 @@ class TestAppealService:
             (),
             {
                 "pk": uuid4(),
-                "appellant_pk": sample_user_pk,
+                "user_pk": sample_user_pk,
                 "status": AppealStatus.PENDING,
             },
         )()
@@ -122,7 +121,7 @@ class TestAppealService:
             (),
             {
                 "pk": appeal_pk,
-                "appellant_pk": sample_user_pk,
+                "user_pk": sample_user_pk,
                 "status": AppealStatus.PENDING,
             },
         )()
@@ -154,7 +153,7 @@ class TestAppealService:
             (),
             {
                 "pk": appeal_pk,
-                "appellant_pk": different_user_pk,
+                "user_pk": different_user_pk,
                 "status": AppealStatus.PENDING,
             },
         )()
@@ -179,7 +178,7 @@ class TestAppealService:
             (),
             {
                 "pk": appeal_pk,
-                "appellant_pk": sample_user_pk,
+                "user_pk": sample_user_pk,
                 "status": AppealStatus.SUSTAINED,
             },
         )()
@@ -231,7 +230,7 @@ class TestAppealService:
                 "pk": appeal_pk,
                 "status": AppealStatus.UNDER_REVIEW,
                 "reviewed_by": reviewer_pk,
-                "appellant_pk": uuid4(),
+                "user_pk": uuid4(),
             },
         )()
 
@@ -270,7 +269,7 @@ class TestAppealService:
                 "pk": appeal_pk,
                 "status": AppealStatus.UNDER_REVIEW,
                 "reviewed_by": reviewer_pk,
-                "appellant_pk": uuid4(),
+                "user_pk": uuid4(),
             },
         )()
 
@@ -338,23 +337,25 @@ class TestAppealService:
                 (),
                 {
                     "pk": uuid4(),
-                    "appellant_pk": sample_user_pk,
+                    "user_pk": sample_user_pk,
                     "appellant_username": f"user{i}",
-                    "content_type": ContentType.POST,
-                    "content_pk": uuid4(),
-                    "appeal_type": AppealType.POST_REJECTION,
-                    "reason": f"Test reason {i}",
-                    "evidence": f"Test evidence {i}",
+                    "sanction_pk": uuid4(),
+                    "flag_pk": None,
+                    "appeal_type": AppealType.SANCTION_APPEAL,
+                    "appeal_reason": f"Test reason {i}",
                     "status": AppealStatus.PENDING,
                     "reviewed_by": None,
                     "reviewer_username": None,
                     "review_notes": None,
-                    "decision_reason": None,
-                    "submitted_at": datetime.now(UTC),
                     "reviewed_at": None,
+                    "restoration_completed": False,
+                    "restoration_completed_at": None,
                     "created_at": datetime.now(UTC),
                     "updated_at": datetime.now(UTC),
-                    "priority_score": 100,
+                    "sanction_type": "temporary_ban",
+                    "sanction_reason": "Violation of community guidelines",
+                    "flag_reason": None,
+                    "flagged_content_type": None,
                 },
             )()
             mock_appeals.append(mock_appeal)
@@ -389,23 +390,25 @@ class TestAppealService:
                 (),
                 {
                     "pk": uuid4(),
-                    "appellant_pk": uuid4(),
+                    "user_pk": uuid4(),
                     "appellant_username": f"user{i}",
-                    "content_type": ContentType.POST,
-                    "content_pk": uuid4(),
-                    "appeal_type": AppealType.POST_REJECTION,
-                    "reason": f"Test reason {i}",
-                    "evidence": f"Test evidence {i}",
+                    "sanction_pk": None,
+                    "flag_pk": uuid4(),
+                    "appeal_type": AppealType.FLAG_APPEAL,
+                    "appeal_reason": f"Test reason {i}",
                     "status": AppealStatus.PENDING,
                     "reviewed_by": None,
                     "reviewer_username": None,
                     "review_notes": None,
-                    "decision_reason": None,
-                    "submitted_at": datetime.now(UTC),
                     "reviewed_at": None,
+                    "restoration_completed": False,
+                    "restoration_completed_at": None,
                     "created_at": datetime.now(UTC),
                     "updated_at": datetime.now(UTC),
-                    "priority_score": 100,
+                    "sanction_type": None,
+                    "sanction_reason": None,
+                    "flag_reason": f"Inappropriate content {i}",
+                    "flagged_content_type": "post",
                 },
             )()
             mock_appeals.append(mock_appeal)
@@ -471,7 +474,7 @@ class TestAppealService:
                 "total_denied": 20,
                 "total_withdrawn": 3,
                 "average_review_time_hours": 24.5,
-                "appeals_by_type": {"post_rejection": 25, "topic_rejection": 15},
+                "appeals_by_type": {"sanction_appeal": 25, "topic_rejection": 15},
                 "top_appellants": [{"username": "user1", "appeal_count": 5}],
                 "reviewer_stats": [{"username": "mod1", "reviews_completed": 10}],
             },

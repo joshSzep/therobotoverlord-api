@@ -111,7 +111,7 @@ async def get_my_appeal(
         )
 
     # Verify ownership
-    if appeal.appellant_pk != current_user.pk:
+    if appeal.user_pk != current_user.pk:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only view your own appeals",

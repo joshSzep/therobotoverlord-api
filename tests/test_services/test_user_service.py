@@ -143,6 +143,7 @@ class TestGetUserGraveyard:
             pk=post_summary.pk,
             topic_pk=post_summary.topic_pk,
             author_pk=sample_user.pk,
+            post_number=1,
             content=post_summary.content,
             status=post_summary.status,
             overlord_feedback=post_summary.overlord_feedback,

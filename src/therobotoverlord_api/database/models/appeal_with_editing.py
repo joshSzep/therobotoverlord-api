@@ -8,7 +8,6 @@ from pydantic import Field
 class AppealDecisionWithEdit(BaseModel):
     """Appeal decision model with optional content editing."""
 
-    decision_reason: str = Field(..., min_length=10, max_length=1000)
     review_notes: str | None = Field(None, max_length=1000)
 
     # Content editing fields (optional)
@@ -27,7 +26,6 @@ class AppealUpdateWithRestoration(BaseModel):
     status: str | None = None
     reviewed_by: str | None = None
     review_notes: str | None = Field(None, max_length=1000)
-    decision_reason: str | None = Field(None, max_length=1000)
     reviewed_at: str | None = None
 
     # Restoration tracking

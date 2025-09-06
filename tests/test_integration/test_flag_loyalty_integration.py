@@ -51,6 +51,7 @@ def sample_post():
         pk=uuid4(),
         topic_pk=uuid4(),
         author_pk=uuid4(),
+        post_number=1,
         content="Sample post content for loyalty testing",
         status=ContentStatus.APPROVED,
         submitted_at=datetime.now(UTC),

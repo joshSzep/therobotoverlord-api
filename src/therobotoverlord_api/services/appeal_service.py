@@ -14,6 +14,7 @@ from therobotoverlord_api.database.models.appeal import AppealEligibility
 from therobotoverlord_api.database.models.appeal import AppealResponse
 from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
+from therobotoverlord_api.database.models.appeal import AppealType
 from therobotoverlord_api.database.models.appeal import AppealUpdate
 from therobotoverlord_api.database.models.appeal import AppealWithContent
 from therobotoverlord_api.database.models.appeal_history import AppealHistoryAction
@@ -72,6 +73,10 @@ class AppealService:
                 "Rate limit exceeded. You can only submit one appeal every 5 minutes.",
             )
 
+        # Verify content type and pk are valid
+        if not appeal_data.content_type or not appeal_data.content_pk:
+            return None, "Invalid appeal type or content pk"
+
         # Check eligibility
         eligibility = await self.check_appeal_eligibility(
             user_pk, appeal_data.content_type, appeal_data.content_pk
@@ -96,8 +101,13 @@ class AppealService:
                 event_type=WebSocketEventType.NEW_APPEAL,
                 data={
                     "appeal_id": str(appeal.pk),
-                    "content_type": appeal_data.content_type.value,
-                    "priority": "normal",
+                    "appeal_type": appeal_data.appeal_type.value,
+                    "content_type": appeal_data.content_type.value
+                    if appeal_data.content_type
+                    else None,
+                    "content_pk": str(appeal_data.content_pk)
+                    if appeal_data.content_pk
+                    else None,
                 },
             ),
         )
@@ -151,19 +161,18 @@ class AppealService:
             return False, "Appeal not found"
 
         # Verify ownership
-        if appeal.appellant_pk != user_pk:
+        if appeal.user_pk != user_pk:
             return False, "You can only withdraw your own appeals"
 
         # Check if appeal can be withdrawn
         if appeal.status not in [AppealStatus.PENDING, AppealStatus.UNDER_REVIEW]:
             return False, f"Cannot withdraw appeal with status: {appeal.status.value}"
 
-        # Update status to withdrawn
+        # Update status to denied (withdrawn appeals are marked as denied)
         update_data = AppealUpdate(
-            status=AppealStatus.WITHDRAWN,
+            status=AppealStatus.DENIED,
             reviewed_by=None,
             review_notes=None,
-            decision_reason=None,
         )
         await self.appeal_repository.update_appeal(appeal_pk, update_data)
 
@@ -221,7 +230,6 @@ class AppealService:
             status=AppealStatus.UNDER_REVIEW,
             reviewed_by=reviewer_pk,
             review_notes=None,
-            decision_reason=None,
         )
 
         await self.appeal_repository.update_appeal(appeal_pk, update_data)
@@ -260,7 +268,6 @@ class AppealService:
         now = datetime.now(UTC)
         update_data = AppealUpdate(
             status=decision,
-            decision_reason=decision_data.decision_reason,
             review_notes=decision_data.review_notes,
             reviewed_at=now,
             reviewed_by=reviewer_pk,
@@ -305,7 +312,6 @@ class AppealService:
         now = datetime.now(UTC)
         update_data = AppealUpdate(
             status=decision,
-            decision_reason=decision_data.decision_reason,
             review_notes=decision_data.review_notes,
             reviewed_at=now,
             reviewed_by=reviewer_pk,
@@ -321,7 +327,6 @@ class AppealService:
                 edited_content,
                 decision_data.edit_reason,
                 decision_data.review_notes,
-                decision_data.decision_reason,
             )
         elif decision == AppealStatus.DENIED:
             await self._process_denied_appeal(appeal)
@@ -369,7 +374,7 @@ class AppealService:
         """
         # Award loyalty points for successful appeal
         await self.loyalty_score_service.record_appeal_outcome(
-            user_pk=appeal.appellant_pk,
+            user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="sustained",
             points_awarded=50,  # Configurable
@@ -387,22 +392,36 @@ class AppealService:
         edited_content: dict[str, str | None] | None = None,
         edit_reason: str | None = None,
         review_notes: str | None = None,
-        decision_reason: str | None = None,
     ) -> None:
         """Process a sustained appeal with optional content editing."""
 
         # 1. Award loyalty points (existing)
         await self.loyalty_score_service.record_appeal_outcome(
-            user_pk=appeal.appellant_pk,
+            user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="sustained",
             points_awarded=50,
         )
 
         # 2. Restore content with edits (NEW)
+        # Determine content type and pk based on appeal type
+        if appeal.appeal_type == AppealType.FLAG_APPEAL:
+            content_type = ContentType.POST
+            content_pk = appeal.flag_pk
+        elif appeal.appeal_type == AppealType.SANCTION_APPEAL:
+            content_type = ContentType.POST  # Sanctions are typically on posts
+            content_pk = appeal.sanction_pk
+        else:
+            content_type = ContentType.POST
+            content_pk = appeal.flag_pk or appeal.sanction_pk
+
+        # Validate content type and pk
+        if not content_type or not content_pk:
+            raise ValueError("Invalid appeal type or content pk")
+
         restoration_result = await self.content_restoration_service.restore_with_edits(
-            content_type=appeal.content_type,
-            content_pk=appeal.content_pk,
+            content_type=content_type,
+            content_pk=content_pk,
             appeal=appeal,
             reviewer_pk=reviewer_pk,
             edited_content=edited_content,
@@ -413,7 +432,6 @@ class AppealService:
         if restoration_result.success:
             update_data = AppealUpdateWithRestoration(
                 review_notes=review_notes,
-                decision_reason=decision_reason,
                 restoration_completed=True,
                 restoration_completed_at=datetime.now(UTC).isoformat(),
                 restoration_metadata={
@@ -445,7 +463,7 @@ class AppealService:
         """
         # Small penalty for denied appeals to discourage frivolous appeals
         await self.loyalty_score_service.record_appeal_outcome(
-            user_pk=appeal.appellant_pk,
+            user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="denied",
             points_awarded=-5,  # Small penalty
@@ -489,7 +507,7 @@ class AppealService:
         """Send WebSocket notification to appellant about appeal outcome."""
         try:
             await self.websocket_manager.send_to_user(
-                appeal.appellant_pk,
+                appeal.user_pk,
                 WebSocketMessage(
                     event_type=WebSocketEventType.APPEAL_OUTCOME,
                     data={
@@ -515,27 +533,27 @@ class AppealService:
 
             denied_count = (
                 await self.appeal_repository.count_user_appeals_by_status_since(
-                    appeal.appellant_pk, AppealStatus.DENIED, cutoff_date
+                    appeal.user_pk, AppealStatus.DENIED, cutoff_date
                 )
             )
 
             # Apply escalating sanctions
             if denied_count >= 5:  # 5+ denied appeals in 30 days
                 # Apply temporary ban from submitting appeals
-                await self._apply_appeal_ban(appeal.appellant_pk, days=7)
+                await self._apply_appeal_ban(appeal.user_pk, days=7)
                 logger.warning(
-                    f"Applied 7-day appeal ban to user {appeal.appellant_pk} for {denied_count} denied appeals"
+                    f"Applied 7-day appeal ban to user {appeal.user_pk} for {denied_count} denied appeals"
                 )
             elif denied_count >= 3:  # 3+ denied appeals in 30 days
                 # Apply warning and reduced loyalty score
                 await self.loyalty_score_service.record_appeal_outcome(
-                    user_pk=appeal.appellant_pk,
+                    user_pk=appeal.user_pk,
                     appeal_pk=appeal.pk,
                     outcome="frivolous_appeal_penalty",
                     points_awarded=-25,
                 )
                 logger.info(
-                    f"Applied frivolous appeal penalty to user {appeal.appellant_pk}"
+                    f"Applied frivolous appeal penalty to user {appeal.user_pk}"
                 )
 
         except Exception:

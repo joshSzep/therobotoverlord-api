@@ -17,7 +17,7 @@ class Post(BaseDBModel):
     parent_post_pk: UUID | None = None
     author_pk: UUID
     content: str
-    post_number: int | None = None
+    post_number: int
     is_edited: bool = False
     edit_count: int = 0
     last_edited_at: datetime | None = None
@@ -35,7 +35,6 @@ class PostCreate(BaseModel):
     parent_post_pk: UUID | None = None
     author_pk: UUID
     content: str
-    post_number: int | None = None
     submitted_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -43,7 +43,7 @@ class SanctionRepository(BaseRepository[Sanction]):
             record = await connection.fetchrow(
                 query,
                 sanction_data.user_pk,
-                sanction_data.type.value,
+                sanction_data.sanction_type.value,
                 applied_by_pk,
                 sanction_data.expires_at,
                 sanction_data.reason,

@@ -20,7 +20,6 @@ from therobotoverlord_api.database.models.appeal import AppealResponse
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealType
 from therobotoverlord_api.database.models.appeal import AppealWithContent
-from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
 
@@ -83,11 +82,8 @@ class TestAppealsAPIComprehensive:
     def sample_appeal_create(self):
         """Sample appeal creation data."""
         return AppealCreate(
-            content_type=ContentType.POST,
-            content_pk=uuid4(),
-            appeal_type=AppealType.POST_REJECTION,
-            reason="This post was incorrectly rejected.",
-            evidence="The post follows all community guidelines.",
+            appeal_type=AppealType.FLAG_APPEAL,
+            reason="This flag was incorrectly applied and should be removed.",
         )
 
     @pytest.fixture
@@ -95,23 +91,25 @@ class TestAppealsAPIComprehensive:
         """Sample appeal with content data."""
         return AppealWithContent(
             pk=uuid4(),
-            appellant_pk=uuid4(),
+            user_pk=uuid4(),
             appellant_username="testuser",
-            content_type=ContentType.POST,
-            content_pk=uuid4(),
-            appeal_type=AppealType.POST_REJECTION,
-            reason="This post was incorrectly rejected.",
-            evidence="The post follows all community guidelines.",
+            sanction_pk=None,
+            flag_pk=None,
+            appeal_type=AppealType.SANCTION_APPEAL,
             status=AppealStatus.PENDING,
+            appeal_reason="This post was incorrectly rejected.",
             reviewed_by=None,
             reviewer_username=None,
             review_notes=None,
-            decision_reason=None,
-            submitted_at=datetime.now(UTC),
             reviewed_at=None,
+            restoration_completed=False,
+            restoration_completed_at=None,
             created_at=datetime.now(UTC),
             updated_at=None,
-            priority_score=100,
+            sanction_type=None,
+            sanction_reason=None,
+            flag_reason=None,
+            flagged_content_type=None,
         )
 
     # User-facing endpoint tests
@@ -136,11 +134,8 @@ class TestAppealsAPIComprehensive:
         response = client.post(
             "/api/v1/appeals/",
             json={
-                "content_type": "post",
-                "content_pk": str(sample_appeal_create.content_pk),
-                "appeal_type": "post_rejection",
+                "appeal_type": "flag_appeal",
                 "reason": sample_appeal_create.reason,
-                "evidence": sample_appeal_create.evidence,
             },
         )
 
@@ -165,11 +160,8 @@ class TestAppealsAPIComprehensive:
         response = client.post(
             "/api/v1/appeals/",
             json={
-                "content_type": "post",
-                "content_pk": str(sample_appeal_create.content_pk),
-                "appeal_type": "post_rejection",
+                "appeal_type": "flag_appeal",
                 "reason": sample_appeal_create.reason,
-                "evidence": sample_appeal_create.evidence,
             },
         )
 
@@ -192,11 +184,8 @@ class TestAppealsAPIComprehensive:
         response = client.post(
             "/api/v1/appeals/",
             json={
-                "content_type": "post",
-                "content_pk": str(sample_appeal_create.content_pk),
-                "appeal_type": "post_rejection",
+                "appeal_type": "flag_appeal",
                 "reason": sample_appeal_create.reason,
-                "evidence": sample_appeal_create.evidence,
             },
         )
 
@@ -326,7 +315,7 @@ class TestAppealsAPIComprehensive:
         sample_appeal_with_content,
     ):
         """Test successful retrieval of specific user appeal."""
-        sample_appeal_with_content.appellant_pk = regular_user.pk
+        sample_appeal_with_content.user_pk = regular_user.pk
         mock_appeal_service.get_appeal_by_id.return_value = sample_appeal_with_content
 
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
@@ -367,7 +356,7 @@ class TestAppealsAPIComprehensive:
         sample_appeal_with_content,
     ):
         """Test retrieval of appeal owned by different user."""
-        sample_appeal_with_content.appellant_pk = uuid4()  # Different user
+        sample_appeal_with_content.user_pk = uuid4()  # Different user
         mock_appeal_service.get_appeal_by_id.return_value = sample_appeal_with_content
 
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service

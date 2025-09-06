@@ -54,6 +54,7 @@ def sample_post():
         topic_pk=uuid4(),
         author_pk=uuid4(),
         content="Sample post content",
+        post_number=1,
         status=ContentStatus.APPROVED,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),

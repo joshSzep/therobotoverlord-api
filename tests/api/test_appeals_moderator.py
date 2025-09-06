@@ -21,7 +21,6 @@ from therobotoverlord_api.database.models.appeal import AppealStats
 from therobotoverlord_api.database.models.appeal import AppealStatus
 from therobotoverlord_api.database.models.appeal import AppealType
 from therobotoverlord_api.database.models.appeal import AppealWithContent
-from therobotoverlord_api.database.models.base import ContentType
 from therobotoverlord_api.database.models.base import UserRole
 from therobotoverlord_api.database.models.user import User
 
@@ -102,30 +101,31 @@ class TestAppealsModeratorAPI:
         """Sample appeal with content data."""
         return AppealWithContent(
             pk=uuid4(),
-            appellant_pk=uuid4(),
+            user_pk=uuid4(),
             appellant_username="testuser",
-            content_type=ContentType.POST,
-            content_pk=uuid4(),
-            appeal_type=AppealType.POST_REJECTION,
-            reason="This post was incorrectly rejected.",
-            evidence="The post follows all community guidelines.",
+            sanction_pk=None,
+            flag_pk=None,
+            appeal_type=AppealType.SANCTION_APPEAL,
             status=AppealStatus.PENDING,
+            appeal_reason="This post was incorrectly rejected.",
             reviewed_by=None,
             reviewer_username=None,
             review_notes=None,
-            decision_reason=None,
-            submitted_at=datetime.now(UTC),
             reviewed_at=None,
+            restoration_completed=False,
+            restoration_completed_at=None,
             created_at=datetime.now(UTC),
             updated_at=None,
-            priority_score=100,
+            sanction_type=None,
+            sanction_reason=None,
+            flag_reason=None,
+            flagged_content_type=None,
         )
 
     @pytest.fixture
     def sample_appeal_decision(self):
         """Sample appeal decision data."""
         return AppealDecision(
-            decision_reason="After review, the original moderation decision was correct.",
             review_notes="Content violates rule 3.2 regarding inflammatory language.",
         )
 
@@ -298,7 +298,6 @@ class TestAppealsModeratorAPI:
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/sustain",
             json={
-                "decision_reason": sample_appeal_decision.decision_reason,
                 "review_notes": sample_appeal_decision.review_notes,
             },
         )
@@ -330,7 +329,6 @@ class TestAppealsModeratorAPI:
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/sustain",
             json={
-                "decision_reason": sample_appeal_decision.decision_reason,
                 "review_notes": sample_appeal_decision.review_notes,
             },
         )
@@ -359,7 +357,6 @@ class TestAppealsModeratorAPI:
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny",
             json={
-                "decision_reason": sample_appeal_decision.decision_reason,
                 "review_notes": sample_appeal_decision.review_notes,
             },
         )
@@ -394,7 +391,6 @@ class TestAppealsModeratorAPI:
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny",
             json={
-                "decision_reason": sample_appeal_decision.decision_reason,
                 "review_notes": sample_appeal_decision.review_notes,
             },
         )
@@ -418,7 +414,7 @@ class TestAppealsModeratorAPI:
             total_today=8,
             total_count=53,
             average_review_time_hours=24.5,
-            appeals_by_type={"post_rejection": 25, "topic_rejection": 15},
+            appeals_by_type={"sanction_appeal": 25, "topic_rejection": 15},
             top_appellants=[{"username": "user1", "appeal_count": 5}],
             reviewer_stats=[{"username": "mod1", "reviews_completed": 10}],
         )
@@ -564,18 +560,24 @@ class TestAppealsModeratorAPI:
         """Test endpoints with invalid request bodies."""
         appeal_pk = uuid4()
 
+        # Mock the decide_appeal method to return proper tuple
+        mock_appeal_service.decide_appeal.return_value = (True, "")
+
         test_app.dependency_overrides[get_appeal_service] = lambda: mock_appeal_service
         test_app.dependency_overrides[get_current_user] = lambda: moderator_user
         test_app.dependency_overrides[require_moderator] = lambda: moderator_user
 
-        # Test sustain appeal with missing required fields
-        response = client.patch(f"/api/v1/appeals/queue/{appeal_pk}/sustain", json={})
+        # Test sustain appeal with invalid data types (review_notes too long)
+        response = client.patch(
+            f"/api/v1/appeals/queue/{appeal_pk}/sustain",
+            json={"review_notes": "x" * 1001},  # Exceeds max_length=1000
+        )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
         # Test deny appeal with invalid data types
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny",
-            json={"decision_reason": 123, "review_notes": True},
+            json={"review_notes": 123},
         )
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 

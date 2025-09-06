@@ -51,15 +51,15 @@ class TestAppealServiceEditing:
         reviewer_pk = uuid4()
         appeal = Appeal(
             pk=uuid4(),
-            content_pk=uuid4(),
-            content_type=ContentType.POST,
-            appellant_pk=uuid4(),
-            appeal_type=AppealType.POST_REMOVAL,
+            user_pk=uuid4(),
+            sanction_pk=None,
+            flag_pk=uuid4(),
+            appeal_type=AppealType.FLAG_APPEAL,
             status=AppealStatus.UNDER_REVIEW,
-            reason="Content was incorrectly flagged",
+            appeal_reason="Content was incorrectly flagged",
             reviewed_by=reviewer_pk,
             created_at=datetime.now(UTC),
-            submitted_at=datetime.now(UTC),
+            updated_at=None,
         )
         # Store reviewer_pk as an attribute for tests to use
         appeal._test_reviewer_pk = reviewer_pk  # type: ignore[attr-defined]
@@ -77,7 +77,6 @@ class TestAppealServiceEditing:
         """Test sustaining appeal without content edits."""
         reviewer_pk = sample_appeal._test_reviewer_pk
         decision_data = AppealDecisionWithEdit(
-            decision_reason="Appeal is valid",
             review_notes="Content was incorrectly flagged",
             edit_content=False,
             edited_title=None,
@@ -90,7 +89,7 @@ class TestAppealServiceEditing:
         mock_restoration_result = RestorationResult(
             success=True,
             content_type=ContentType.POST,
-            content_pk=sample_appeal.content_pk,
+            content_pk=sample_appeal.flag_pk,  # Use flag_pk since this is a FLAG_APPEAL appeal
             version_pk=uuid4(),
             restoration_pk=uuid4(),
             content_edited=False,
@@ -113,8 +112,8 @@ class TestAppealServiceEditing:
         mock_appeal_repo.get.assert_called_once_with(sample_appeal.pk)
         mock_appeal_repo.update_appeal.assert_called_once()
         mock_restoration_service.restore_with_edits.assert_called_once_with(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=reviewer_pk,
             edited_content=None,
@@ -135,7 +134,6 @@ class TestAppealServiceEditing:
         reviewer_pk = sample_appeal._test_reviewer_pk
         edited_content = {"title": "Edited Title", "body": "Edited content"}
         decision_data = AppealDecisionWithEdit(
-            decision_reason="Appeal is valid but content needs editing",
             review_notes="Fixed inappropriate language",
             edit_content=True,
             edited_title="Edited Title",
@@ -148,7 +146,7 @@ class TestAppealServiceEditing:
         mock_restoration_result = RestorationResult(
             success=True,
             content_type=ContentType.POST,
-            content_pk=sample_appeal.content_pk,
+            content_pk=sample_appeal.flag_pk,
             version_pk=uuid4(),
             restoration_pk=uuid4(),
             content_edited=True,
@@ -169,8 +167,8 @@ class TestAppealServiceEditing:
         assert error == ""
 
         mock_restoration_service.restore_with_edits.assert_called_once_with(
-            content_type=sample_appeal.content_type,
-            content_pk=sample_appeal.content_pk,
+            content_type=ContentType.POST,
+            content_pk=sample_appeal.flag_pk,
             appeal=sample_appeal,
             reviewer_pk=reviewer_pk,
             edited_content=edited_content,
@@ -184,7 +182,6 @@ class TestAppealServiceEditing:
         """Test denying appeal with detailed reasoning."""
         reviewer_pk = sample_appeal._test_reviewer_pk
         decision_data = AppealDecisionWithEdit(
-            decision_reason="Appeal denied",
             review_notes="Content violates community guidelines",
             edit_content=False,
             edited_title=None,
@@ -208,7 +205,7 @@ class TestAppealServiceEditing:
         mock_appeal_repo.get.assert_called_once_with(sample_appeal.pk)
         mock_appeal_repo.update_appeal.assert_called_once()
         mock_loyalty_service.record_appeal_outcome.assert_called_once_with(
-            user_pk=sample_appeal.appellant_pk,
+            user_pk=sample_appeal.user_pk,
             appeal_pk=sample_appeal.pk,
             outcome="denied",
             points_awarded=-5,
@@ -221,7 +218,6 @@ class TestAppealServiceEditing:
         """Test invalid decision status."""
         reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason",
             review_notes="Test",
             edit_content=False,
             edited_title=None,
@@ -248,7 +244,6 @@ class TestAppealServiceEditing:
         appeal_pk = uuid4()
         reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason",
             review_notes="Test",
             edit_content=False,
             edited_title=None,
@@ -276,7 +271,6 @@ class TestAppealServiceEditing:
         """Test wrong reviewer assigned."""
         wrong_reviewer_pk = uuid4()
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason",
             review_notes="Test",
             edit_content=False,
             edited_title=None,
@@ -304,19 +298,17 @@ class TestAppealServiceEditing:
         """Test appeal not under review."""
         appeal = Appeal(
             pk=uuid4(),
-            content_pk=uuid4(),
-            content_type=ContentType.POST,
-            appellant_pk=uuid4(),
-            appeal_type=AppealType.POST_REMOVAL,
-            reason="This is a test appeal reason",
+            user_pk=uuid4(),
+            flag_pk=uuid4(),
+            appeal_type=AppealType.FLAG_APPEAL,
+            appeal_reason="This is a test appeal reason",
             status=AppealStatus.SUSTAINED,  # Already decided
             reviewed_by=uuid4(),
             created_at=datetime.now(UTC),
-            submitted_at=datetime.now(UTC),
+            updated_at=None,
         )
 
         decision_data = AppealDecisionWithEdit(
-            decision_reason="This is a test decision reason",
             review_notes="Test",
             edit_content=False,
             edited_title=None,

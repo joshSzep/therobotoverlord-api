@@ -77,7 +77,6 @@ class TestAppealsEditingAPI:
         """Test successful appeal sustainment with editing."""
         appeal_pk = uuid4()
         decision_data = {
-            "decision_reason": "Appeal is valid but content needs editing",
             "review_notes": "Fixed inappropriate language",
             "edit_content": True,
             "edited_title": "Edited Title",
@@ -123,7 +122,6 @@ class TestAppealsEditingAPI:
         """Test failed appeal sustainment with editing."""
         appeal_pk = uuid4()
         decision_data = {
-            "decision_reason": "Appeal is valid",
             "review_notes": "Content was incorrectly flagged",
             "edit_reason": None,
         }
@@ -156,7 +154,6 @@ class TestAppealsEditingAPI:
         """Test successful appeal denial with detailed reasoning."""
         appeal_pk = uuid4()
         decision_data = {
-            "decision_reason": "Appeal lacks merit and content violates guidelines",
             "review_notes": "Content violates community guidelines",
             "edit_content": False,
         }
@@ -330,14 +327,14 @@ class TestAppealsEditingAPI:
         # Test sustain with edit endpoint
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/sustain-with-edit",
-            json={"decision_reason": "Test", "review_notes": "Test"},
+            json={"review_notes": "Test"},
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
         # Test deny with edit endpoint
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny-with-edit",
-            json={"decision_reason": "Test", "review_notes": "Test"},
+            json={"review_notes": "Test"},
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 

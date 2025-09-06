@@ -96,7 +96,7 @@ class TestAppealsAPIEdgeCases:
             json={
                 "content_type": "post",
                 "content_pk": str(uuid4()),
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "reason": "Test reason",
                 "evidence": "Test evidence",
             },
@@ -132,7 +132,7 @@ class TestAppealsAPIEdgeCases:
             "/api/v1/appeals/",
             json={
                 "content_type": "post",
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "reason": "Test reason",
                 "evidence": "Test evidence",
             },
@@ -145,7 +145,7 @@ class TestAppealsAPIEdgeCases:
             json={
                 "content_type": "post",
                 "content_pk": str(uuid4()),
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "evidence": "Test evidence",
             },
         )
@@ -166,7 +166,7 @@ class TestAppealsAPIEdgeCases:
             json={
                 "content_type": "invalid_type",
                 "content_pk": str(uuid4()),
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "reason": "Test reason",
                 "evidence": "Test evidence",
             },
@@ -207,7 +207,7 @@ class TestAppealsAPIEdgeCases:
             json={
                 "content_type": "post",
                 "content_pk": str(uuid4()),
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "reason": very_long_reason,
                 "evidence": very_long_evidence,
             },
@@ -371,7 +371,7 @@ class TestAppealsAPIEdgeCases:
         # Test with empty strings
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/sustain",
-            json={"decision_reason": "", "review_notes": ""},
+            json={"review_notes": ""},
         )
         # This might be valid or invalid depending on business rules
         assert response.status_code in [
@@ -382,7 +382,7 @@ class TestAppealsAPIEdgeCases:
         # Test with only whitespace
         response = client.patch(
             f"/api/v1/appeals/queue/{appeal_pk}/deny",
-            json={"decision_reason": "   ", "review_notes": "\t\n"},
+            json={"review_notes": "\t\n"},
         )
         assert response.status_code in [
             status.HTTP_200_OK,
@@ -461,7 +461,7 @@ class TestAppealsAPIEdgeCases:
                 json={
                     "content_type": "post",
                     "content_pk": str(uuid4()),
-                    "appeal_type": "post_rejection",
+                    "appeal_type": "sanction_appeal",
                     "reason": test_case,
                     "evidence": f"Evidence: {test_case}",
                 },
@@ -486,7 +486,7 @@ class TestAppealsAPIEdgeCases:
             json={
                 "content_type": "post",
                 "content_pk": str(uuid4()),
-                "appeal_type": "post_rejection",
+                "appeal_type": "sanction_appeal",
                 "reason": None,  # Explicit null
                 "evidence": "Test evidence",
             },
