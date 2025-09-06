@@ -37,9 +37,9 @@ class UserSessionRepository(BaseRepository[UserSession]):
         data = session_data.model_dump(exclude_unset=True)
         return await self.update_from_dict(session_pk, data)
 
-    async def get_by_token(self, session_token: str) -> UserSession | None:
-        """Get session by token."""
-        return await self.find_one_by(session_token=session_token)
+    async def get_by_id(self, session_id: str) -> UserSession | None:
+        """Get session by ID."""
+        return await self.find_one_by(session_id=session_id)
 
     async def get_by_user(self, user_pk: UUID) -> list[UserSession]:
         """Get all sessions for a user."""
@@ -69,15 +69,15 @@ class UserSessionRepository(BaseRepository[UserSession]):
             # Extract count from result string like "DELETE 5"
             return int(result.split()[-1]) if result else 0
 
-    async def revoke_session(self, session_token: str) -> bool:
+    async def revoke_session(self, session_id: str) -> bool:
         """Revoke a session by deleting it."""
         query = """
             DELETE FROM user_sessions
-            WHERE session_token = $1
+            WHERE session_id = $1
         """
 
         async with get_db_connection() as connection:
-            result = await connection.execute(query, session_token)
+            result = await connection.execute(query, session_id)
             return result == "DELETE 1"
 
     async def revoke_all_user_sessions(self, user_pk: UUID) -> int:
@@ -91,17 +91,17 @@ class UserSessionRepository(BaseRepository[UserSession]):
             result = await connection.execute(query, user_pk)
             return int(result.split()[-1]) if result else 0
 
-    async def update_last_accessed(self, session_token: str) -> UserSession | None:
+    async def update_last_accessed(self, session_id: str) -> UserSession | None:
         """Update the last accessed time for a session."""
         query = """
             UPDATE user_sessions
             SET last_accessed_at = NOW()
-            WHERE session_token = $1
+            WHERE session_id = $1
             RETURNING *
         """
 
         async with get_db_connection() as connection:
-            record = await connection.fetchrow(query, session_token)
+            record = await connection.fetchrow(query, session_id)
             return self._record_to_model(record) if record else None
 
 

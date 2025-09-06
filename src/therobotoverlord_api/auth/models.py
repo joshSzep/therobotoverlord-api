@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
+from pydantic import EmailStr
 from pydantic import Field
 
 from therobotoverlord_api.database.models.base import UserRole
@@ -67,7 +68,7 @@ class GoogleUserInfo(BaseModel):
 class AuthResponse(BaseModel):
     """Authentication response model."""
 
-    user_id: UUID = Field(description="User UUID")
+    user_pk: UUID = Field(description="User UUID")
     username: str = Field(description="Username")
     role: UserRole = Field(description="User role")
     loyalty_score: int = Field(description="User loyalty score")
@@ -101,7 +102,7 @@ class SessionInfo(BaseModel):
     """Session information model."""
 
     session_id: str = Field(description="Session ID")
-    user_id: UUID = Field(description="User UUID")
+    user_pk: UUID = Field(description="User UUID")
     created_at: datetime = Field(description="Session creation time")
     last_used_at: datetime = Field(description="Last session activity")
     last_used_ip: str | None = Field(default=None, description="Last used IP address")
@@ -112,3 +113,41 @@ class SessionInfo(BaseModel):
     reuse_detected: bool = Field(
         default=False, description="Token reuse detection flag"
     )
+
+
+class EmailLoginRequest(BaseModel):
+    """Email/password login request."""
+
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="User password")
+
+
+class RegisterRequest(BaseModel):
+    """User registration request."""
+
+    email: EmailStr = Field(..., description="User email address")
+    username: str = Field(..., min_length=3, max_length=100, description="Username")
+    password: str = Field(..., min_length=8, description="User password")
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request."""
+
+    email: EmailStr = Field(..., description="User email address")
+
+
+class PasswordResetConfirm(BaseModel):
+    """Password reset confirmation."""
+
+    token: str = Field(..., description="Password reset token")
+    new_password: str = Field(..., min_length=8, description="New password")
+
+
+class EmailAuthResponse(BaseModel):
+    """Email/password authentication response."""
+
+    success: bool = Field(..., description="Whether authentication was successful")
+    message: str = Field(..., description="Response message")
+    user: dict | None = Field(None, description="User data if successful")
+    access_token: str | None = Field(None, description="JWT access token")
+    refresh_token: str | None = Field(None, description="JWT refresh token")

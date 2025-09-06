@@ -4,21 +4,24 @@ from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 
 class AuthSettings(BaseSettings):
     """Authentication configuration settings."""
 
     # Google OAuth Configuration
-    google_client_id: str = Field(..., description="Google OAuth client ID")
-    google_client_secret: str = Field(..., description="Google OAuth client secret")
+    google_client_id: str = Field(default="", description="Google OAuth client ID")
+    google_client_secret: str = Field(
+        default="", description="Google OAuth client secret"
+    )
     google_redirect_uri: str = Field(
         default="http://localhost:8000/api/v1/auth/callback",
         description="Google OAuth redirect URI",
     )
 
     # JWT Configuration
-    jwt_secret_key: str = Field(..., description="JWT signing secret key")
+    jwt_secret_key: str = Field(default="", description="JWT signing secret key")
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     jwt_issuer: str = Field(default="therobotoverlord-api", description="JWT issuer")
     jwt_audience: str = Field(
@@ -53,18 +56,15 @@ class AuthSettings(BaseSettings):
         default=3600, description="Session cleanup interval (1 hour)"
     )
 
-    class Config:
-        env_prefix = "AUTH_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_prefix="AUTH_",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 def get_auth_settings() -> AuthSettings:
     """Get authentication settings instance."""
-    from therobotoverlord_api.config.settings import get_settings
-
-    settings = get_settings()
-    return AuthSettings(
-        google_client_id=settings.auth.google_client_id,
-        google_client_secret=settings.auth.google_client_secret,
-        jwt_secret_key=settings.auth.jwt_secret_key,
-    )
+    return AuthSettings()

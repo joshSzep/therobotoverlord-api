@@ -21,7 +21,7 @@ class UserRepository(BaseRepository[User]):
 
     def _record_to_model(self, record: Record) -> User:
         """Convert database record to User model."""
-        return User.model_validate(record)
+        return User.model_validate(dict(record.items()))
 
     async def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""

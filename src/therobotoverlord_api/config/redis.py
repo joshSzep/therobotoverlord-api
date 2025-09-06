@@ -12,6 +12,7 @@ class RedisSettings(BaseSettings):
     redis_url: str = Field(
         default="redis://localhost:6379/0",
         description="Redis connection URL",
+        alias="REDIS_URL",
     )
     host: str = Field(default="localhost", description="Redis host")
     port: int = Field(default=6379, description="Redis port")

@@ -350,9 +350,9 @@ class LoyaltyScoreRepository(BaseRepository):
         stats_query = """
         SELECT
             COUNT(*) as total_users,
-            AVG(loyalty_score) as average_score,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY loyalty_score) as median_score,
-            MIN(CASE WHEN lr.percentile_rank <= 0.1 THEN loyalty_score END) as top_10_threshold
+            AVG(u.loyalty_score) as average_score,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY u.loyalty_score) as median_score,
+            MIN(CASE WHEN lr.percentile_rank <= 0.1 THEN u.loyalty_score END) as top_10_threshold
         FROM users u
         LEFT JOIN leaderboard_rankings lr ON u.pk = lr.user_pk
         WHERE u.is_banned = false

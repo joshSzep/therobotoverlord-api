@@ -37,7 +37,7 @@ class TestUserRepository:
         ) as mock_validate:
             result = repository._record_to_model(mock_record)
 
-            mock_validate.assert_called_once_with(mock_record)
+            mock_validate.assert_called_once_with(dict(mock_record.items()))
             assert result == sample_user
 
     @pytest.mark.asyncio

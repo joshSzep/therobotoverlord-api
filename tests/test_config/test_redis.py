@@ -34,7 +34,7 @@ class TestRedisSettings:
     def test_custom_settings_from_env(self):
         """Test Redis settings from environment variables."""
         env_vars = {
-            "REDIS_REDIS_URL": "redis://custom:6380/1",
+            "REDIS_URL": "redis://custom:6380/1",
             "REDIS_HOST": "custom",
             "REDIS_PORT": "6380",
             "REDIS_DATABASE": "1",

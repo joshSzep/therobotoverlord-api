@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 
 from therobotoverlord_api.database.models.base import BaseDBModel
-from therobotoverlord_api.database.models.base import SanctionSeverity
 from therobotoverlord_api.database.models.base import UserRole
 
 
@@ -15,8 +14,9 @@ class User(BaseDBModel):
     """User database model."""
 
     email: str
-    google_id: str
+    google_id: str | None = None
     username: str
+    password_hash: str | None = None
     role: UserRole = UserRole.CITIZEN
     loyalty_score: int = 0
     is_banned: bool = False
@@ -24,20 +24,18 @@ class User(BaseDBModel):
     is_active: bool = True
     email_verified: bool = False
 
-    # TOS violation fields
-    tos_violation_count: int = 0
-    last_tos_violation_at: datetime | None = None
-    tos_violation_severity: SanctionSeverity = SanctionSeverity.MINOR
-
 
 class UserCreate(BaseModel):
     """User creation model."""
 
     email: str
-    google_id: str
+    google_id: str | None = None
     username: str
+    password_hash: str | None = None
     role: UserRole = UserRole.CITIZEN
     email_verified: bool = False
+
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class UserUpdate(BaseModel):

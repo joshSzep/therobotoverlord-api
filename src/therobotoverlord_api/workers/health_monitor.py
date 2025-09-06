@@ -86,11 +86,8 @@ class WorkerHealthMonitor(BaseWorker):
         try:
             if not self.redis_client:
                 redis_settings = get_redis_settings()
-                self.redis_client = redis.Redis(
-                    host=redis_settings.host,
-                    port=redis_settings.port,
-                    db=redis_settings.database,
-                    password=redis_settings.password,
+                self.redis_client = redis.from_url(
+                    redis_settings.redis_url,
                     decode_responses=True,
                 )
 

@@ -21,6 +21,7 @@ from therobotoverlord_api.database.repositories.user import UserRepository
 from therobotoverlord_api.services.loyalty_score_service import (
     get_loyalty_score_service,
 )
+from therobotoverlord_api.services.password_service import get_password_service
 
 
 class AuthService:
@@ -31,6 +32,7 @@ class AuthService:
         self.jwt_service = JWTService()
         self.session_service = SessionService()
         self.user_repository = UserRepository()
+        self.password_service = get_password_service()
 
     async def initiate_login(self) -> tuple[str, str]:
         """Initiate Google OAuth login flow."""
@@ -74,7 +76,7 @@ class AuthService:
 
         # Create auth response
         auth_response = AuthResponse(
-            user_id=user.pk,
+            user_pk=user.pk,
             username=user.username,
             role=user.role,
             loyalty_score=user.loyalty_score,
@@ -118,7 +120,7 @@ class AuthService:
             return None
 
         # Get user info
-        user = await self.user_repository.get_by_pk(session.user_id)
+        user = await self.user_repository.get_by_pk(session.user_pk)
         if not user or user.is_banned:
             return None
 
@@ -147,7 +149,7 @@ class AuthService:
         # Get session info before revoking to broadcast offline status
         session = await self.session_service.get_session(session_id)
         if session:
-            user = await self.user_repository.get_by_pk(session.user_id)
+            user = await self.user_repository.get_by_pk(session.user_pk)
             if user:
                 # Broadcast user offline status via WebSocket
                 from therobotoverlord_api.websocket.events import get_event_broadcaster
@@ -196,6 +198,161 @@ class AuthService:
     async def get_user_info(self, user_id: UUID) -> User | None:
         """Get user information by ID."""
         return await self.user_repository.get_by_pk(user_id)
+
+    async def register_user(
+        self,
+        email: str,
+        username: str,
+        password: str,
+        ip_address: str,
+        user_agent: str | None = None,
+    ) -> tuple[AuthResponse, TokenPair]:
+        """Register a new user with email and password."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"AuthService.register_user called for email: {email}")
+
+        try:
+            logger.info("Checking if user already exists by email")
+            # Check if user already exists
+            existing_user = await self.user_repository.get_by_email(email)
+            if existing_user:
+                logger.warning(f"User with email {email} already exists")
+                raise ValueError("User with this email already exists")
+
+            logger.info("Checking if username is taken")
+            # Check if username is taken
+            existing_username = await self.user_repository.get_by_username(username)
+            if existing_username:
+                logger.warning(f"Username {username} is already taken")
+                raise ValueError("Username is already taken")
+
+            logger.info("Hashing password")
+            # Hash password
+            password_hash = self.password_service.hash_password(password)
+
+            logger.info("Creating user data object")
+            # Create user data
+            user_data = UserCreate(
+                email=email,
+                username=username,
+                password_hash=password_hash,
+                role=UserRole.CITIZEN,
+            )
+
+            logger.info("Creating user in database")
+            # Create user
+            new_user = await self.user_repository.create_user(user_data)
+            logger.info(f"User created successfully with pk: {new_user.pk}")
+
+            logger.info("Creating auth response")
+            # Create auth response
+            auth_response = AuthResponse(
+                user_pk=new_user.pk,
+                username=new_user.username,
+                role=new_user.role,
+                loyalty_score=new_user.loyalty_score,
+                is_new_user=True,
+            )
+
+            logger.info("Generating JWT tokens")
+            # Generate tokens first to get session_id
+            token_pair = self.jwt_service.create_token_pair(
+                user_id=new_user.pk,
+                role=new_user.role,
+            )
+            logger.info(
+                f"Tokens generated with session_id: {token_pair.refresh_token.session_id}"
+            )
+
+            logger.info("Creating user session")
+            # Create session with the generated session_id and refresh token
+            await self.create_user_session(
+                user_id=new_user.pk,
+                session_id=token_pair.refresh_token.session_id,
+                refresh_token=token_pair.refresh_token.token,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            logger.info("Session created successfully")
+
+            logger.info("Registration process completed successfully")
+            return auth_response, token_pair
+
+        except Exception as e:
+            logger.error(f"Error in register_user: {str(e)}")  # noqa: RUF010
+            logger.exception("Full traceback:")
+            raise
+
+    async def login_user(
+        self,
+        email: str,
+        password: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> tuple[AuthResponse, TokenPair] | None:
+        """Login user with email and password."""
+        # Get user by email
+        user = await self.user_repository.get_by_email(email)
+        if not user or not user.password_hash:
+            return None
+
+        # Verify password
+        if not self.password_service.verify_password(password, user.password_hash):
+            return None
+
+        # Check if user is banned or inactive
+        if user.is_banned or not user.is_active:
+            return None
+
+        # Generate user permissions
+        permissions = await self._get_user_permissions(user)
+
+        # Create JWT token pair
+        token_pair = self.jwt_service.create_token_pair(
+            user_id=user.pk,
+            role=user.role,
+            permissions=permissions,
+        )
+
+        # Create session
+        await self.create_user_session(
+            user_id=user.pk,
+            session_id=token_pair.refresh_token.session_id,
+            refresh_token=token_pair.refresh_token.token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Create auth response
+        auth_response = AuthResponse(
+            user_pk=user.pk,
+            username=user.username,
+            role=user.role,
+            loyalty_score=user.loyalty_score,
+            is_new_user=False,
+        )
+
+        return auth_response, token_pair
+
+    async def create_user_session(
+        self,
+        user_id: UUID,
+        session_id: str,
+        refresh_token: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        """Create a new user session."""
+        await self.session_service.create_session(
+            user_id=user_id,
+            session_id=session_id,
+            refresh_token=refresh_token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
     async def _get_or_create_user(
         self, google_user_info: GoogleUserInfo

@@ -64,10 +64,12 @@ class SessionService:
 
             return SessionInfo(
                 session_id=record["session_id"],
-                user_id=record["user_pk"],
+                user_pk=record["user_pk"],
                 created_at=record["created_at"],
                 last_used_at=record["last_used_at"],
-                last_used_ip=record["last_used_ip"],
+                last_used_ip=str(record["last_used_ip"])
+                if record["last_used_ip"]
+                else None,
                 last_used_user_agent=record["last_used_user_agent"],
                 is_revoked=record["is_revoked"],
                 reuse_detected=record["reuse_detected"],
@@ -76,10 +78,17 @@ class SessionService:
     async def get_session(self, session_id: str) -> SessionInfo | None:
         """Get session information by session ID."""
         query = """
-            SELECT session_id, user_pk, created_at, last_used_at,
-                   last_used_ip, last_used_user_agent, is_revoked, reuse_detected
+            SELECT
+                session_id,
+                user_pk,
+                created_at,
+                last_used_at,
+                last_used_ip,
+                last_used_user_agent,
+                is_revoked,
+                reuse_detected
             FROM user_sessions
-            WHERE session_id = $1 AND expires_at > NOW()
+            WHERE session_id = $1 AND expires_at > NOW() AND is_revoked = FALSE
         """
 
         async with get_db_connection() as connection:
@@ -89,10 +98,12 @@ class SessionService:
 
             return SessionInfo(
                 session_id=record["session_id"],
-                user_id=record["user_pk"],
+                user_pk=record["user_pk"],
                 created_at=record["created_at"],
                 last_used_at=record["last_used_at"],
-                last_used_ip=record["last_used_ip"],
+                last_used_ip=str(record["last_used_ip"])
+                if record["last_used_ip"]
+                else None,
                 last_used_user_agent=record["last_used_user_agent"],
                 is_revoked=record["is_revoked"],
                 reuse_detected=record["reuse_detected"],
@@ -105,9 +116,9 @@ class SessionService:
     ) -> bool:
         """Validate refresh token against stored hash."""
         query = """
-            SELECT refresh_token_hash, is_revoked, reuse_detected
+            SELECT refresh_token_hash, reuse_detected
             FROM user_sessions
-            WHERE session_id = $1 AND expires_at > NOW()
+            WHERE session_id = $1 AND expires_at > NOW() AND is_revoked = FALSE
         """
 
         async with get_db_connection() as connection:
@@ -115,8 +126,8 @@ class SessionService:
             if not record:
                 return False
 
-            # Check if session is revoked or reuse detected
-            if record["is_revoked"] or record["reuse_detected"]:
+            # Check if reuse detected
+            if record["reuse_detected"]:
                 return False
 
             # Verify token hash
@@ -223,10 +234,12 @@ class SessionService:
             return [
                 SessionInfo(
                     session_id=record["session_id"],
-                    user_id=record["user_pk"],
+                    user_pk=record["user_pk"],
                     created_at=record["created_at"],
                     last_used_at=record["last_used_at"],
-                    last_used_ip=record["last_used_ip"],
+                    last_used_ip=str(record["last_used_ip"])
+                    if record["last_used_ip"]
+                    else None,
                     last_used_user_agent=record["last_used_user_agent"],
                     is_revoked=record["is_revoked"],
                     reuse_detected=record["reuse_detected"],

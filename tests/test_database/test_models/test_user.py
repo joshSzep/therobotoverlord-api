@@ -154,6 +154,7 @@ class TestUserCreate:
             "email": "test@example.com",
             "google_id": "google123",
             "username": "testuser",
+            "password_hash": None,
             "role": "admin",
             "email_verified": False,
         }

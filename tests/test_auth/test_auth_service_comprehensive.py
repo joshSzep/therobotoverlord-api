@@ -136,7 +136,7 @@ class TestAuthServiceComprehensive:
 
         # Verify response
         assert isinstance(auth_response, AuthResponse)
-        assert auth_response.user_id == new_user.pk
+        assert auth_response.user_pk == new_user.pk
         assert auth_response.username == new_user.username
         assert auth_response.is_new_user is True
         assert token_pair == mock_token_pair
@@ -165,7 +165,7 @@ class TestAuthServiceComprehensive:
 
         # Verify existing user returned
         assert auth_response.is_new_user is False
-        assert auth_response.user_id == mock_user.pk
+        assert auth_response.user_pk == mock_user.pk
 
     @pytest.mark.asyncio
     async def test_complete_login_existing_user_by_email_update_google_id(
@@ -221,7 +221,7 @@ class TestAuthServiceComprehensive:
             auth_response, token_pair = await auth_service.complete_login("auth_code")
 
         # Should fall back to original user
-        assert auth_response.user_id == mock_user.pk
+        assert auth_response.user_pk == mock_user.pk
 
     @pytest.mark.asyncio
     async def test_refresh_tokens_success(
@@ -233,7 +233,7 @@ class TestAuthServiceComprehensive:
 
         mock_session = SessionInfo(
             session_id=session_id,
-            user_id=mock_user.pk,
+            user_pk=mock_user.pk,
             created_at=datetime.now(UTC),
             last_used_at=datetime.now(UTC),
             is_revoked=False,
@@ -268,7 +268,7 @@ class TestAuthServiceComprehensive:
         )
         auth_service.session_service.get_session.assert_called_once_with(session_id)
         auth_service.user_repository.get_by_pk.assert_called_once_with(
-            mock_session.user_id
+            mock_session.user_pk
         )
         auth_service.session_service.rotate_refresh_token.assert_called_once()
 
@@ -304,7 +304,7 @@ class TestAuthServiceComprehensive:
 
         mock_session = SessionInfo(
             session_id=session_id,
-            user_id=uuid4(),
+            user_pk=uuid4(),
             created_at=datetime.now(UTC),
             last_used_at=datetime.now(UTC),
             is_revoked=True,  # Revoked session
@@ -356,7 +356,7 @@ class TestAuthServiceComprehensive:
 
         mock_session = SessionInfo(
             session_id=session_id,
-            user_id=banned_user.pk,
+            user_pk=banned_user.pk,
             created_at=datetime.now(UTC),
             last_used_at=datetime.now(UTC),
             is_revoked=False,
@@ -383,7 +383,7 @@ class TestAuthServiceComprehensive:
 
         mock_session = SessionInfo(
             session_id=session_id,
-            user_id=mock_user.pk,
+            user_pk=mock_user.pk,
             created_at=datetime.now(UTC),
             last_used_at=datetime.now(UTC),
             is_revoked=False,

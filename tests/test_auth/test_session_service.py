@@ -66,7 +66,7 @@ class TestSessionService:
 
         assert isinstance(session_info, SessionInfo)
         assert session_info.session_id == session_id
-        assert session_info.user_id == user_id
+        assert session_info.user_pk == user_id
         assert session_info.is_revoked is False
         mock_db_connection.fetchrow.assert_called_once()
 
@@ -97,7 +97,7 @@ class TestSessionService:
 
         assert isinstance(session_info, SessionInfo)
         assert session_info.session_id == session_id
-        assert session_info.user_id == user_id
+        assert session_info.user_pk == user_id
 
     @pytest.mark.asyncio
     async def test_get_session_not_found(self, session_service, mock_db_connection):
@@ -175,12 +175,8 @@ class TestSessionService:
         session_id = "test_session_id"
         refresh_token = "test_refresh_token"
 
-        mock_record = {
-            "refresh_token_hash": session_service._hash_token(refresh_token),
-            "is_revoked": True,
-            "reuse_detected": False,
-        }
-        mock_db_connection.fetchrow.return_value = mock_record
+        # Revoked sessions won't be returned by the query (WHERE is_revoked = FALSE)
+        mock_db_connection.fetchrow.return_value = None
 
         with patch(
             "therobotoverlord_api.auth.session_service.get_db_connection"

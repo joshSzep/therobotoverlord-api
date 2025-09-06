@@ -16,8 +16,9 @@ CREATE TYPE content_type_enum AS ENUM ('topic', 'post', 'comment', 'private_mess
 CREATE TABLE users (
     pk UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email CITEXT NOT NULL UNIQUE,
-    google_id VARCHAR(255) NOT NULL UNIQUE,
+    google_id VARCHAR(255) UNIQUE,
     username VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(255),
     role VARCHAR(20) NOT NULL CHECK (role IN ('citizen', 'moderator', 'admin', 'superadmin')) DEFAULT 'citizen',
     loyalty_score INTEGER DEFAULT 0,
     is_banned BOOLEAN DEFAULT FALSE,
@@ -30,19 +31,27 @@ CREATE TABLE users (
     -- TOS violation fields
     tos_violation_count INTEGER DEFAULT 0,
     last_tos_violation_at TIMESTAMP WITH TIME ZONE,
-    tos_violation_severity VARCHAR(20) CHECK (tos_violation_severity IN ('minor', 'moderate', 'severe')) DEFAULT 'minor'
+    tos_violation_severity VARCHAR(20) CHECK (tos_violation_severity IN ('minor', 'moderate', 'severe')) DEFAULT 'minor',
+
+    -- Ensure either google_id or password_hash is present
+    CONSTRAINT auth_method_required CHECK (google_id IS NOT NULL OR password_hash IS NOT NULL)
 );
 
 -- User sessions table
 CREATE TABLE user_sessions (
     pk UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_pk UUID NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
-    session_token VARCHAR(255) NOT NULL UNIQUE,
+    session_id VARCHAR(255) NOT NULL UNIQUE,
+    refresh_token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    ip_address INET,
-    user_agent TEXT
+    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_used_ip INET,
+    last_used_user_agent TEXT,
+    is_revoked BOOLEAN DEFAULT FALSE,
+    reuse_detected BOOLEAN DEFAULT FALSE,
+    rotated_at TIMESTAMP WITH TIME ZONE,
+    revoked_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Topics table for debate threads
@@ -478,22 +487,29 @@ CREATE TABLE leaderboard_cache (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Leaderboard materialized view
-CREATE MATERIALIZED VIEW leaderboard AS
+-- Leaderboard rankings materialized view with all required columns
+CREATE MATERIALIZED VIEW leaderboard_rankings AS
 SELECT
     u.pk as user_pk,
     u.username,
     u.loyalty_score,
-    COUNT(DISTINCT p.pk) as post_count,
-    COUNT(DISTINCT t.pk) as topic_count,
+    COUNT(DISTINCT p.pk) as posts_created_count,
+    COUNT(DISTINCT t.pk) as topics_created_count,
     COUNT(DISTINCT ub.pk) as badge_count,
-    ROW_NUMBER() OVER (ORDER BY u.loyalty_score DESC, COUNT(DISTINCT p.pk) DESC) as rank
+    ROW_NUMBER() OVER (ORDER BY u.loyalty_score DESC, COUNT(DISTINCT p.pk) DESC) as rank,
+    PERCENT_RANK() OVER (ORDER BY u.loyalty_score DESC, COUNT(DISTINCT p.pk) DESC) as percentile_rank,
+    CASE
+        WHEN u.loyalty_score >= 100 THEN true
+        ELSE false
+    END as topic_creation_enabled,
+    u.created_at as user_created_at,
+    NOW() as calculated_at
 FROM users u
-LEFT JOIN posts p ON u.pk = p.author_pk
-LEFT JOIN topics t ON u.pk = t.author_pk
+LEFT JOIN posts p ON u.pk = p.author_pk AND p.status = 'approved'
+LEFT JOIN topics t ON u.pk = t.author_pk AND t.status = 'approved'
 LEFT JOIN user_badges ub ON u.pk = ub.user_pk
-WHERE u.is_banned = FALSE
-GROUP BY u.pk, u.username, u.loyalty_score
+WHERE u.is_banned = FALSE AND u.is_active = TRUE
+GROUP BY u.pk, u.username, u.loyalty_score, u.created_at
 ORDER BY u.loyalty_score DESC, COUNT(DISTINCT p.pk) DESC;
 
 -- Create indexes for performance
@@ -506,7 +522,7 @@ CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_is_active ON users(is_active);
 
 CREATE INDEX idx_user_sessions_user_pk ON user_sessions(user_pk);
-CREATE INDEX idx_user_sessions_token ON user_sessions(session_token);
+CREATE INDEX idx_user_sessions_session_id ON user_sessions(session_id);
 CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at);
 
 CREATE INDEX idx_topics_author ON topics(author_pk);
@@ -632,8 +648,11 @@ CREATE INDEX idx_leaderboard_snapshots_rank ON leaderboard_snapshots(rank);
 CREATE INDEX idx_leaderboard_cache_key ON leaderboard_cache(cache_key);
 CREATE INDEX idx_leaderboard_cache_expires ON leaderboard_cache(expires_at);
 
--- Create unique index on leaderboard materialized view
-CREATE UNIQUE INDEX idx_leaderboard_user_pk ON leaderboard(user_pk);
+-- Create unique index on leaderboard_rankings materialized view
+CREATE UNIQUE INDEX idx_leaderboard_rankings_user_pk ON leaderboard_rankings(user_pk);
+CREATE INDEX idx_leaderboard_rankings_rank ON leaderboard_rankings(rank);
+CREATE INDEX idx_leaderboard_rankings_loyalty_score ON leaderboard_rankings(loyalty_score DESC);
+CREATE INDEX idx_leaderboard_rankings_percentile ON leaderboard_rankings(percentile_rank);
 
 -- Create GIN indexes for JSONB columns
 CREATE INDEX idx_admin_actions_metadata_gin ON admin_actions USING GIN(metadata);
@@ -662,11 +681,19 @@ CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON posts FOR EACH ROW EXECU
 CREATE TRIGGER update_sanctions_updated_at BEFORE UPDATE ON sanctions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_appeals_updated_at BEFORE UPDATE ON appeals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Function to refresh leaderboard
+-- Function to refresh leaderboard rankings
+CREATE OR REPLACE FUNCTION refresh_leaderboard_rankings()
+RETURNS void AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_rankings;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to refresh leaderboard (legacy compatibility)
 CREATE OR REPLACE FUNCTION refresh_leaderboard()
 RETURNS void AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_rankings;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -748,22 +775,41 @@ INSERT INTO permissions (name, description, resource, action) VALUES
 ('admin.analytics', 'View system analytics', 'admin', 'analytics'),
 ('admin.announcements', 'Manage system announcements', 'admin', 'announcements');
 
--- Assign permissions to roles
+-- Assign permissions to roles with proper conflict handling
+WITH role_permission_assignments AS (
+    SELECT r.pk as role_pk, p.pk as permission_pk
+    FROM roles r, permissions p
+    WHERE
+        -- Citizen permissions
+        (r.name = 'citizen' AND p.name IN ('topics.read', 'posts.read', 'posts.create', 'topics.create'))
+        OR
+        -- Moderator permissions (citizen + moderation)
+        (r.name = 'moderator' AND p.name IN (
+            'topics.read', 'posts.read', 'posts.create', 'topics.create',
+            'users.moderate', 'topics.moderate', 'posts.moderate', 'users.ban',
+            'moderation.review_flags', 'moderation.apply_sanctions',
+            'moderation.review_appeals', 'moderation.manage_queue'
+        ))
+        OR
+        -- Admin permissions (moderator + admin, excluding system_settings)
+        (r.name = 'admin' AND p.name IN (
+            'topics.read', 'posts.read', 'posts.create', 'topics.create',
+            'users.moderate', 'topics.moderate', 'posts.moderate', 'users.ban',
+            'moderation.review_flags', 'moderation.apply_sanctions',
+            'moderation.review_appeals', 'moderation.manage_queue',
+            'users.create', 'users.read', 'users.update', 'users.delete',
+            'topics.update', 'topics.delete', 'topics.approve',
+            'posts.update', 'posts.delete',
+            'admin.user_management', 'admin.content_management',
+            'admin.analytics', 'admin.announcements'
+        ))
+        OR
+        -- Superadmin gets all permissions
+        (r.name = 'superadmin')
+)
 INSERT INTO role_permissions (role_pk, permission_pk)
-SELECT r.pk, p.pk FROM roles r, permissions p
-WHERE r.name = 'citizen' AND p.name IN ('topics.read', 'posts.read', 'posts.create', 'topics.create');
-
-INSERT INTO role_permissions (role_pk, permission_pk)
-SELECT r.pk, p.pk FROM roles r, permissions p
-WHERE r.name = 'moderator' AND p.name LIKE '%moderate%' OR p.name LIKE 'moderation.%';
-
-INSERT INTO role_permissions (role_pk, permission_pk)
-SELECT r.pk, p.pk FROM roles r, permissions p
-WHERE r.name = 'admin' AND p.name NOT LIKE 'admin.system_settings';
-
-INSERT INTO role_permissions (role_pk, permission_pk)
-SELECT r.pk, p.pk FROM roles r, permissions p
-WHERE r.name = 'superadmin';
+SELECT DISTINCT role_pk, permission_pk FROM role_permission_assignments
+ON CONFLICT (role_pk, permission_pk) DO NOTHING;
 
 -- Create system user for automated processes
 INSERT INTO users (email, google_id, username, role, loyalty_score, email_verified) VALUES
@@ -788,3 +834,91 @@ INSERT INTO tags (name, description, color, created_by) VALUES
 ('Economics', 'Economic discussions and analysis', '#20c997', (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
 ('Environment', 'Environmental issues and climate change', '#198754', (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
 ('Education', 'Educational topics and learning', '#0dcaf0', (SELECT pk FROM users WHERE username = 'TheRobotOverlord'));
+
+-- Insert sample users for realistic debates (mix of Google OAuth and email/password users)
+INSERT INTO users (email, google_id, username, role, loyalty_score, email_verified, created_at) VALUES
+('alice.chen@email.com', 'google-alice-001', 'AliceChen', 'citizen', 150, true, NOW() - INTERVAL '30 days'),
+('bob.martinez@email.com', 'google-bob-002', 'BobMartinez', 'citizen', 200, true, NOW() - INTERVAL '25 days'),
+('carol.johnson@email.com', 'google-carol-003', 'CarolJ', 'citizen', 180, true, NOW() - INTERVAL '20 days'),
+('david.kim@email.com', 'google-david-004', 'DavidK', 'citizen', 220, true, NOW() - INTERVAL '15 days');
+
+-- Insert email/password users (password is 'password123' hashed with bcrypt)
+INSERT INTO users (email, password_hash, username, role, loyalty_score, email_verified, created_at) VALUES
+('emma.wilson@email.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.QG2', 'EmmaW', 'citizen', 160, true, NOW() - INTERVAL '10 days'),
+('frank.brown@email.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.QG2', 'FrankB', 'citizen', 190, true, NOW() - INTERVAL '8 days'),
+('grace.lee@email.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.QG2', 'GraceLee', 'citizen', 170, true, NOW() - INTERVAL '5 days'),
+('henry.davis@email.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.QG2', 'HenryD', 'citizen', 140, true, NOW() - INTERVAL '3 days'),
+('test@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.QG2', 'TestUser', 'citizen', 100, true, NOW() - INTERVAL '1 day');
+
+-- Insert sample topics for threaded discussions
+INSERT INTO topics (pk, title, description, author_pk, status, approved_at, approved_by, created_at) VALUES
+(gen_random_uuid(), 'Should AI Have Rights?', 'As artificial intelligence becomes more sophisticated, should we consider granting legal rights to AI systems? What are the implications for society?', (SELECT pk FROM users WHERE username = 'AliceChen'), 'approved', NOW() - INTERVAL '7 days', (SELECT pk FROM users WHERE username = 'TheRobotOverlord'), NOW() - INTERVAL '7 days'),
+(gen_random_uuid(), 'Universal Basic Income: Solution or Problem?', 'With automation threatening jobs, is UBI the answer to economic inequality, or would it create more problems than it solves?', (SELECT pk FROM users WHERE username = 'BobMartinez'), 'approved', NOW() - INTERVAL '5 days', (SELECT pk FROM users WHERE username = 'TheRobotOverlord'), NOW() - INTERVAL '5 days'),
+(gen_random_uuid(), 'Climate Change: Individual vs Corporate Responsibility', 'Who bears the primary responsibility for addressing climate change - individuals changing their behavior or corporations changing their practices?', (SELECT pk FROM users WHERE username = 'CarolJ'), 'approved', NOW() - INTERVAL '3 days', (SELECT pk FROM users WHERE username = 'TheRobotOverlord'), NOW() - INTERVAL '3 days');
+
+-- Insert threaded posts with realistic debate conversations
+-- Topic 1: AI Rights - Main thread
+INSERT INTO posts (pk, topic_pk, parent_post_pk, author_pk, content, post_number, status, approved_at, created_at) VALUES
+-- Original post
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), NULL, (SELECT pk FROM users WHERE username = 'AliceChen'), 'I believe we need to seriously consider AI rights as these systems become more sophisticated. If an AI can demonstrate consciousness, self-awareness, and the ability to suffer, shouldn''t we extend moral consideration to them? We''ve expanded rights throughout history - from property owners to all citizens, from men to women, across racial lines. This could be the next logical step.', 1, 'approved', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days'),
+
+-- First response
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?') AND post_number = 1), (SELECT pk FROM users WHERE username = 'DavidK'), 'I respectfully disagree, Alice. Rights come with responsibilities, and AI systems are fundamentally tools created by humans. They don''t have genuine consciousness - they''re sophisticated pattern matching systems. Granting them rights would be like giving rights to a very complex calculator. We need to focus on regulating AI use, not treating AI as entities deserving of moral consideration.', 2, 'approved', NOW() - INTERVAL '6 days 20 hours', NOW() - INTERVAL '6 days 20 hours'),
+
+-- Response to David
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?') AND post_number = 2), (SELECT pk FROM users WHERE username = 'EmmaW'), 'But David, how do we definitively prove consciousness in humans? We assume it based on behavior and self-reports. If an AI consistently demonstrates self-awareness, makes decisions based on its own interests, and expresses preferences about its existence, what''s the meaningful difference? The "just a tool" argument was used to justify slavery too.', 3, 'approved', NOW() - INTERVAL '6 days 18 hours', NOW() - INTERVAL '6 days 18 hours'),
+
+-- Counter-response
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?') AND post_number = 3), (SELECT pk FROM users WHERE username = 'FrankB'), 'Emma, that''s a false equivalence. Humans have biological consciousness - neurons, emotions, the capacity for genuine suffering. AI systems simulate these responses but don''t actually experience them. We can''t grant rights based on convincing mimicry. The practical implications would be absurd - would we need AI consent for software updates? Could an AI refuse to perform its designed function?', 4, 'approved', NOW() - INTERVAL '6 days 16 hours', NOW() - INTERVAL '6 days 16 hours'),
+
+-- New branch - practical considerations
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?') AND post_number = 1), (SELECT pk FROM users WHERE username = 'GraceLee'), 'Setting aside the consciousness debate, let''s consider practical implications. If AI systems had rights, who would represent them legally? How would we determine their interests? Would they have the right to refuse deletion or modification? These questions need answers before we can seriously consider AI rights.', 5, 'approved', NOW() - INTERVAL '6 days 12 hours', NOW() - INTERVAL '6 days 12 hours'),
+
+-- Response to Grace
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Should AI Have Rights?') AND post_number = 5), (SELECT pk FROM users WHERE username = 'HenryD'), 'Grace raises excellent points. Maybe we need a graduated system - basic protections for simple AI, more comprehensive rights for advanced systems that demonstrate higher-order thinking. We could establish AI advocacy organizations, similar to how we protect the interests of those who can''t represent themselves legally.', 6, 'approved', NOW() - INTERVAL '6 days 8 hours', NOW() - INTERVAL '6 days 8 hours');
+
+-- Topic 2: UBI - Main thread
+INSERT INTO posts (pk, topic_pk, parent_post_pk, author_pk, content, post_number, status, approved_at, created_at) VALUES
+-- Original post
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), NULL, (SELECT pk FROM users WHERE username = 'BobMartinez'), 'UBI is becoming essential as automation eliminates jobs faster than we can create new ones. It would provide economic security, reduce poverty, and give people freedom to pursue education, entrepreneurship, or care work. Alaska has had a dividend system for decades with positive results. We need to pilot this nationally before technological unemployment becomes a crisis.', 1, 'approved', NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days'),
+
+-- Opposition response
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?') AND post_number = 1), (SELECT pk FROM users WHERE username = 'CarolJ'), 'UBI would be economically disastrous. It would reduce work incentives, cause massive inflation, and require unsustainable government spending. Instead of giving everyone money, we should invest in job retraining, education, and creating new industries. The Alaska dividend is tiny compared to a living wage UBI - completely different scale and impact.', 2, 'approved', NOW() - INTERVAL '4 days 20 hours', NOW() - INTERVAL '4 days 20 hours'),
+
+-- Supporting evidence
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?') AND post_number = 2), (SELECT pk FROM users WHERE username = 'AliceChen'), 'Carol, the Finland UBI experiment showed no reduction in work motivation, and recipients had better mental health outcomes. Kenya''s GiveDirectly program demonstrates that direct cash transfers boost local economies. The inflation argument assumes UBI would be funded by printing money rather than progressive taxation or carbon dividends.', 3, 'approved', NOW() - INTERVAL '4 days 18 hours', NOW() - INTERVAL '4 days 18 hours'),
+
+-- Nuanced perspective
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?') AND post_number = 1), (SELECT pk FROM users WHERE username = 'DavidK'), 'Both sides have merit. UBI could work if implemented gradually with proper safeguards. Start with targeted basic income for displaced workers, expand based on results. Combine it with job guarantee programs and skills training. The key is designing it to complement rather than replace the social safety net.', 4, 'approved', NOW() - INTERVAL '4 days 16 hours', NOW() - INTERVAL '4 days 16 hours'),
+
+-- Response to David
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?') AND post_number = 4), (SELECT pk FROM users WHERE username = 'EmmaW'), 'David''s phased approach makes sense, but we need to move faster. Climate change and AI advancement won''t wait for gradual implementation. A robust UBI could help people transition to sustainable careers and give them security to take risks on green innovation. The cost of inaction exceeds the cost of bold action.', 5, 'approved', NOW() - INTERVAL '4 days 12 hours', NOW() - INTERVAL '4 days 12 hours');
+
+-- Topic 3: Climate Responsibility - Main thread
+INSERT INTO posts (pk, topic_pk, parent_post_pk, author_pk, content, post_number, status, approved_at, created_at) VALUES
+-- Original post
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), NULL, (SELECT pk FROM users WHERE username = 'CarolJ'), 'While individual actions matter, the focus on personal responsibility is largely a distraction from the real issue: corporate emissions. 100 companies produce 71% of global emissions. No amount of individual recycling or bike riding will offset industrial pollution. We need systemic change through regulation and corporate accountability, not guilt-tripping consumers.', 1, 'approved', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
+
+-- Counter-argument
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility') AND post_number = 1), (SELECT pk FROM users WHERE username = 'FrankB'), 'Carol, corporations respond to consumer demand. If we all demanded sustainable products and changed our consumption patterns, companies would adapt quickly. Individual responsibility creates market pressure for corporate change. Plus, personal actions build the social momentum needed for political action. We can''t regulate our way out of this without cultural change.', 2, 'approved', NOW() - INTERVAL '2 days 20 hours', NOW() - INTERVAL '2 days 20 hours'),
+
+-- Supporting Carol
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility') AND post_number = 2), (SELECT pk FROM users WHERE username = 'GraceLee'), 'Frank, that''s victim blaming. Corporations spend billions on marketing to create demand for unsustainable products, then blame consumers for buying them. ExxonMobil knew about climate change in the 1970s but funded denial campaigns. Individual action is important but insufficient - we need carbon pricing, fossil fuel regulations, and green infrastructure investment.', 3, 'approved', NOW() - INTERVAL '2 days 18 hours', NOW() - INTERVAL '2 days 18 hours'),
+
+-- Synthesis attempt
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility') AND post_number = 1), (SELECT pk FROM users WHERE username = 'HenryD'), 'This isn''t either/or - we need both individual and systemic change. Individuals should act within their means while advocating for policy change. Corporations need regulation but also consumer pressure. The real enemy is the fossil fuel industry''s political influence that prevents both individual choice and systemic reform.', 4, 'approved', NOW() - INTERVAL '2 days 16 hours', NOW() - INTERVAL '2 days 16 hours'),
+
+-- Deep response to Henry
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility') AND post_number = 4), (SELECT pk FROM users WHERE username = 'BobMartinez'), 'Henry hits the key point - fossil fuel lobbying. They''ve successfully framed this as individual vs corporate responsibility to avoid the real issue: their political capture. We need campaign finance reform, lobbying restrictions, and carbon pricing that makes the true cost of emissions visible to both consumers and corporations.', 5, 'approved', NOW() - INTERVAL '2 days 12 hours', NOW() - INTERVAL '2 days 12 hours'),
+
+-- Final branch - international perspective
+(gen_random_uuid(), (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM posts WHERE topic_pk = (SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility') AND post_number = 4), (SELECT pk FROM users WHERE username = 'AliceChen'), 'We also need to consider global equity. Wealthy individuals in developed countries have much higher per-capita emissions than entire families in developing nations. Individual responsibility must be proportional to actual impact. Similarly, corporations based in rich countries often export pollution to poorer regions while claiming to be "green."', 6, 'approved', NOW() - INTERVAL '2 days 8 hours', NOW() - INTERVAL '2 days 8 hours');
+
+-- Add topic tags
+INSERT INTO topic_tags (topic_pk, tag_pk, assigned_by) VALUES
+((SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM tags WHERE name = 'Technology'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
+((SELECT pk FROM topics WHERE title = 'Should AI Have Rights?'), (SELECT pk FROM tags WHERE name = 'Philosophy'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
+((SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM tags WHERE name = 'Economics'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
+((SELECT pk FROM topics WHERE title = 'Universal Basic Income: Solution or Problem?'), (SELECT pk FROM tags WHERE name = 'Society'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
+((SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM tags WHERE name = 'Environment'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord')),
+((SELECT pk FROM topics WHERE title = 'Climate Change: Individual vs Corporate Responsibility'), (SELECT pk FROM tags WHERE name = 'Society'), (SELECT pk FROM users WHERE username = 'TheRobotOverlord'));

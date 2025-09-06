@@ -159,7 +159,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 return None
 
             # Get user info
-            user = await self.user_repository.get_by_pk(session.user_id)
+            user = await self.user_repository.get_by_pk(session.user_pk)
             if not user or user.is_banned:
                 return None
 

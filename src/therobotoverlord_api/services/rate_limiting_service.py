@@ -247,11 +247,48 @@ _rate_limiting_service: RateLimitingService | None = None
 
 async def get_rate_limiting_service() -> RateLimitingService:
     """Get rate limiting service instance."""
-    if _rate_limiting_service is None:
-        # Import here to avoid circular imports
-        from therobotoverlord_api.workers.redis_connection import get_redis_client
+    global _rate_limiting_service  # noqa: PLW0603
 
-        redis_client = await get_redis_client()
-        return RateLimitingService(redis_client)
+    if _rate_limiting_service is None:
+        try:
+            # Import here to avoid circular imports
+            from therobotoverlord_api.workers.redis_connection import get_redis_client
+
+            redis_client = await get_redis_client()
+            _rate_limiting_service = RateLimitingService(redis_client)
+        except Exception as e:
+            logger.error(f"Failed to initialize rate limiting service: {e}")
+            # Return a mock service that allows all requests
+            _rate_limiting_service = _create_mock_rate_limiting_service()
 
     return _rate_limiting_service
+
+
+def _create_mock_rate_limiting_service() -> RateLimitingService:
+    """Create a mock rate limiting service that allows all requests."""
+
+    class MockRedis:
+        async def pipeline(self):
+            return MockPipeline()
+
+        async def close(self):
+            pass
+
+    class MockPipeline:
+        def zremrangebyscore(self, *args, **kwargs):
+            return self
+
+        def zadd(self, *args, **kwargs):
+            return self
+
+        def zcard(self, *args, **kwargs):
+            return self
+
+        def expire(self, *args, **kwargs):
+            return self
+
+        async def execute(self):
+            return [0, 1, 0, True]  # Mock results that indicate success
+
+    mock_redis = MockRedis()
+    return RateLimitingService(mock_redis)  # type: ignore[reportGeneralTypeIssues, arg-type]

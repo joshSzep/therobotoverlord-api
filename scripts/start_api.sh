@@ -19,10 +19,16 @@ until redis-cli -h ${REDIS_HOST:-localhost} -p ${REDIS_PORT:-6379} ping; do
 done
 echo "Redis is up - continuing"
 
+# Drop the database if it exists
+PGPASSWORD=${DATABASE_PASSWORD:-password} dropdb -h ${DATABASE_HOST:-localhost} -p ${DATABASE_PORT:-5432} -U ${DATABASE_USERNAME:-postgres} therobotoverlord || true
+
+# Create database if it doesn't exist
+PGPASSWORD=${DATABASE_PASSWORD:-password} createdb -h ${DATABASE_HOST:-localhost} -p ${DATABASE_PORT:-5432} -U ${DATABASE_USERNAME:-postgres} therobotoverlord || true
+
 # Run database migrations
 echo "Running database migrations..."
 cd /app
-uv run yoyo apply --database "${DATABASE_URL}" migrations/
+uv run yoyo apply --database "postgresql://${DATABASE_USERNAME:-postgres}:${DATABASE_PASSWORD:-password}@${DATABASE_HOST:-localhost}:${DATABASE_PORT:-5432}/therobotoverlord" migrations/
 
 # Start the API server
 echo "Starting API server..."

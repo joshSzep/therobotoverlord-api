@@ -1,5 +1,7 @@
 """Authentication API endpoints for The Robot Overlord API."""
 
+import logging
+
 from typing import Annotated
 
 from fastapi import APIRouter
@@ -10,12 +12,15 @@ from fastapi import Response
 from fastapi import status
 
 from therobotoverlord_api.auth.dependencies import get_current_user
+from therobotoverlord_api.auth.models import EmailLoginRequest
 from therobotoverlord_api.auth.models import LoginRequest
 from therobotoverlord_api.auth.models import LogoutRequest
-from therobotoverlord_api.auth.rate_limiting import check_auth_rate_limit
+from therobotoverlord_api.auth.models import RegisterRequest
 from therobotoverlord_api.auth.service import AuthService
 from therobotoverlord_api.config.auth import get_auth_settings
 from therobotoverlord_api.database.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -40,7 +45,6 @@ async def handle_callback(
     request: Request,
     response: Response,
     login_data: LoginRequest,
-    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Handle Google OAuth callback and complete login."""
     try:
@@ -82,7 +86,6 @@ async def handle_callback(
 async def refresh_tokens(
     request: Request,
     response: Response,
-    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Refresh access token using refresh token."""
     refresh_token = request.cookies.get("__Secure-trl_rt")
@@ -138,7 +141,6 @@ async def logout(
     response: Response,
     logout_data: LogoutRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    _: Annotated[None, Depends(check_auth_rate_limit)],
 ):
     """Logout user by revoking session(s)."""
     try:
@@ -204,6 +206,136 @@ async def get_current_user_info(
     }
 
 
+@router.post("/login/email")
+async def login_with_email(
+    request: Request,
+    response: Response,
+    login_data: EmailLoginRequest,
+):
+    """Login with email and password."""
+
+    logger.info(f"Starting login for email: {login_data.email}")
+
+    try:
+        logger.info("Creating AuthService instance")
+        auth_service = AuthService()
+
+        logger.info("Extracting client information")
+        ip_address = _get_client_ip(request)
+        user_agent = request.headers.get("user-agent")
+        logger.info(f"Client IP: {ip_address}, User Agent: {user_agent}")
+
+        logger.info("Calling auth_service.login_user")
+        # Login user
+        result = await auth_service.login_user(
+            email=login_data.email,
+            password=login_data.password,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        if not result:
+            logger.warning(f"Login failed for {login_data.email}: Invalid credentials")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+            )
+
+        auth_response, token_pair = result
+        logger.info(f"Login successful for user: {auth_response.user_pk}")
+
+        logger.info("Setting authentication cookies")
+        # Set cookies
+        _set_auth_cookies(response, token_pair)
+
+        logger.info("Preparing response data")
+        response_data = {
+            "status": "ok",
+            "data": {
+                "user": {
+                    "id": str(auth_response.user_pk),
+                    "email": login_data.email,
+                    "username": auth_response.username,
+                    "role": auth_response.role,
+                    "loyalty_score": auth_response.loyalty_score,
+                },
+            },
+        }
+
+        logger.info("Login completed successfully")
+        return response_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login failed for {login_data.email}: {str(e)}")  # noqa: RUF010
+        logger.exception("Full login error traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {str(e)}",  # noqa: RUF010
+        ) from e
+
+
+@router.post("/register")
+async def register_user(
+    request: Request,
+    response: Response,
+    register_data: RegisterRequest,
+):
+    """Register a new user with email and password."""
+
+    logger.info(f"Starting registration for email: {register_data.email}")
+
+    try:
+        logger.info("Creating AuthService instance")
+        auth_service = AuthService()
+
+        logger.info("Extracting client information")
+        ip_address = _get_client_ip(request)
+        user_agent = request.headers.get("user-agent")
+        logger.info(f"Client IP: {ip_address}, User Agent: {user_agent}")
+
+        logger.info("Calling auth_service.register_user")
+        # Register user
+        auth_response, token_pair = await auth_service.register_user(
+            email=register_data.email,
+            username=register_data.username,
+            password=register_data.password,
+            ip_address=ip_address or "unknown",
+            user_agent=user_agent,
+        )
+        logger.info(f"Registration successful for user: {auth_response.user_pk}")
+
+        logger.info("Setting authentication cookies")
+        # Set cookies
+        _set_auth_cookies(response, token_pair)
+
+        logger.info("Preparing response data")
+        response_data = {
+            "status": "ok",
+            "data": {
+                "user": {
+                    "id": str(auth_response.user_pk),
+                    "email": register_data.email,
+                    "username": auth_response.username,
+                    "role": auth_response.role,
+                    "loyalty_score": auth_response.loyalty_score,
+                },
+            },
+        }
+
+        logger.info("Registration completed successfully")
+        return response_data
+
+    except Exception as e:
+        logger.error(f"Registration failed for {register_data.email}: {str(e)}")  # noqa: RUF010
+        logger.exception("Full registration error traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}",  # noqa: RUF010
+        ) from e
+
+
 @router.get("/jwks")
 async def get_jwks():
     """Get JSON Web Key Set for token validation."""
@@ -224,50 +356,96 @@ def _get_client_ip(request: Request) -> str | None:
 
     # Fall back to direct connection
     if request.client and hasattr(request.client, "host"):
-        return request.client.host
+        return str(request.client.host)
 
     return None
 
 
 def _set_auth_cookies(response: Response, token_pair) -> None:
     """Set authentication cookies on response."""
+
     settings = get_auth_settings()
 
-    response.set_cookie(
-        key="__Secure-trl_at",
-        value=token_pair.access_token.token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        domain=settings.cookie_domain,
-        path="/",
-        expires=token_pair.access_token.expires_at,
+    logger.info(
+        f"Setting auth cookies with settings: domain='{settings.cookie_domain}', secure={settings.cookie_secure}, samesite={settings.cookie_samesite}"
     )
 
-    response.set_cookie(
-        key="__Secure-trl_rt",
-        value=token_pair.refresh_token.token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        domain=settings.cookie_domain,
-        path="/",
-        expires=token_pair.refresh_token.expires_at,
+    # Use secure cookie names only in production (HTTPS)
+    access_cookie_name = "__Secure-trl_at" if settings.cookie_secure else "trl_at"
+    refresh_cookie_name = "__Secure-trl_rt" if settings.cookie_secure else "trl_rt"
+
+    logger.info(
+        f"Using cookie names: access={access_cookie_name}, refresh={refresh_cookie_name}"
     )
+
+    # Prepare cookie kwargs
+    access_cookie_kwargs = {
+        "key": access_cookie_name,
+        "value": token_pair.access_token.token,
+        "httponly": True,
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+        "path": "/",
+        "expires": token_pair.access_token.expires_at,
+    }
+
+    refresh_cookie_kwargs = {
+        "key": refresh_cookie_name,
+        "value": token_pair.refresh_token.token,
+        "httponly": True,
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+        "path": "/",
+        "expires": token_pair.refresh_token.expires_at,
+    }
+
+    # Only set domain if it's not empty
+    if settings.cookie_domain:
+        access_cookie_kwargs["domain"] = settings.cookie_domain
+        refresh_cookie_kwargs["domain"] = settings.cookie_domain
+        logger.info(f"Setting cookies with domain: {settings.cookie_domain}")
+    else:
+        logger.info("Setting cookies without domain (localhost)")
+
+    logger.info(f"Access token expires at: {token_pair.access_token.expires_at}")
+    logger.info(f"Refresh token expires at: {token_pair.refresh_token.expires_at}")
+
+    response.set_cookie(
+        key=access_cookie_kwargs["key"],
+        value=access_cookie_kwargs["value"],
+        httponly=access_cookie_kwargs["httponly"],
+        secure=access_cookie_kwargs["secure"],
+        samesite=access_cookie_kwargs["samesite"],
+        path=access_cookie_kwargs["path"],
+        expires=access_cookie_kwargs["expires"],
+        domain=access_cookie_kwargs.get("domain"),
+    )
+    response.set_cookie(
+        key=refresh_cookie_kwargs["key"],
+        value=refresh_cookie_kwargs["value"],
+        httponly=refresh_cookie_kwargs["httponly"],
+        secure=refresh_cookie_kwargs["secure"],
+        samesite=refresh_cookie_kwargs["samesite"],
+        path=refresh_cookie_kwargs["path"],
+        expires=refresh_cookie_kwargs["expires"],
+        domain=refresh_cookie_kwargs.get("domain"),
+    )
+
+    logger.info("Auth cookies set successfully")
 
 
 def _clear_auth_cookies(response: Response) -> None:
     """Clear authentication cookies from response."""
     settings = get_auth_settings()
 
-    response.delete_cookie(
-        key="__Secure-trl_at",
-        domain=settings.cookie_domain,
-        path="/",
-    )
+    # Use correct cookie names based on secure setting
+    access_cookie_name = "__Secure-trl_at" if settings.cookie_secure else "trl_at"
+    refresh_cookie_name = "__Secure-trl_rt" if settings.cookie_secure else "trl_rt"
 
-    response.delete_cookie(
-        key="__Secure-trl_rt",
-        domain=settings.cookie_domain,
-        path="/",
-    )
+    # Prepare delete cookie kwargs
+    delete_kwargs = {"path": "/"}
+    if settings.cookie_domain:
+        delete_kwargs["domain"] = settings.cookie_domain
+
+    response.delete_cookie(key=access_cookie_name, **delete_kwargs)  # type: ignore[arg-type]
+    response.delete_cookie(key=refresh_cookie_name, **delete_kwargs)  # type: ignore[arg-type]

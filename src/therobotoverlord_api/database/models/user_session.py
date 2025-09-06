@@ -13,7 +13,7 @@ class UserSession(BaseDBModel):
     """User session database model."""
 
     user_pk: UUID
-    session_token: str
+    session_id: str
     expires_at: datetime
     last_accessed_at: datetime
     ip_address: str | None = None
@@ -24,7 +24,7 @@ class UserSessionCreate(BaseModel):
     """User session creation model."""
 
     user_pk: UUID
-    session_token: str
+    session_id: str
     expires_at: datetime
     ip_address: str | None = None
     user_agent: str | None = None
