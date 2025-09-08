@@ -48,35 +48,51 @@ class QueueService:
         await self._ensure_connections()
 
         try:
-            # Calculate priority score (timestamp + priority offset)
+            # Get topic details first
+            topic_query = (
+                "SELECT title, description, author_pk FROM topics WHERE pk = $1"
+            )
+            topic_result = await self.db.fetchrow(topic_query, topic_id)
+
+            if not topic_result:
+                logger.error(f"Topic {topic_id} not found")
+                return None
+
+            # Get current timestamp
             now = datetime.now(UTC)
-            priority_score = int(now.timestamp() * 1000) + priority
 
             # Get current queue position
             position = await self._get_next_queue_position("topic_creation_queue")
 
-            # Insert into queue
+            # Insert into queue with topic details
             query = """
                 INSERT INTO topic_creation_queue
-                (topic_pk, priority_score, priority, position_in_queue, status, entered_queue_at)
-                VALUES ($1, $2, $3, $4, 'pending', $5)
+                (title, description, author_pk, priority, position_in_queue, status, entered_queue_at)
+                VALUES ($1, $2, $3, $4, $5, 'pending', $6)
                 RETURNING pk
             """
 
             result = await self.db.fetchrow(
-                query, topic_id, priority_score, priority, position, now
+                query,
+                topic_result["title"],
+                topic_result["description"],
+                topic_result["author_pk"],
+                priority,
+                position,
+                now,
             )
 
             if result:
                 queue_id = result["pk"]
 
-                # Enqueue the job in Redis
+                # Enqueue the job in Redis with correct queue name
                 if self.redis_pool:
                     await self.redis_pool.enqueue_job(
                         "process_topic_moderation",
                         str(queue_id),
                         str(topic_id),
                         _job_id=f"topic_{topic_id}",
+                        _queue_name="topic_moderation",
                     )
                 else:
                     raise RuntimeError("Redis pool not available")
@@ -85,11 +101,9 @@ class QueueService:
 
                 # Broadcast queue position update via WebSocket
                 try:
-                    # Get user ID for this topic
-                    user_query = "SELECT created_by_pk FROM topics WHERE pk = $1"
-                    user_result = await self.db.fetchrow(user_query, topic_id)
-                    if user_result:
-                        user_id = user_result["created_by_pk"]
+                    # Use the author_pk from the topic we already fetched
+                    user_id = topic_result["author_pk"]
+                    if user_id:
                         event_broadcaster = get_event_broadcaster(websocket_manager)
                         await event_broadcaster.broadcast_queue_position_update(
                             user_id=user_id,
@@ -140,13 +154,14 @@ class QueueService:
             if result:
                 queue_id = result["pk"]
 
-                # Enqueue the job in Redis
+                # Enqueue the job in Redis with correct queue name
                 if self.redis_pool:
                     await self.redis_pool.enqueue_job(
                         "process_post_moderation",
                         str(queue_id),
                         str(post_id),
                         _job_id=f"post_{post_id}",
+                        _queue_name="post_moderation",
                     )
                 else:
                     raise RuntimeError("Redis pool not available")
@@ -223,13 +238,14 @@ class QueueService:
             if result:
                 queue_id = result["pk"]
 
-                # Enqueue the job in Redis
+                # Enqueue the job in Redis with correct queue name
                 if self.redis_pool:
                     await self.redis_pool.enqueue_job(
                         "process_private_message_moderation",
                         str(queue_id),
                         str(message_id),
                         _job_id=f"message_{message_id}",
+                        _queue_name="private_message_moderation",
                     )
                 else:
                     raise RuntimeError("Redis pool not available")
@@ -261,53 +277,85 @@ class QueueService:
         if not queue_table:
             return None
 
-        content_field = "topic_pk" if content_type == "topics" else "post_pk"
+        # For topic_creation_queue, we need to match by topic details since there's no topic_pk
+        if content_type == "topics":
+            try:
+                # Get topic details first
+                topic_query = (
+                    "SELECT title, description, author_pk FROM topics WHERE pk = $1"
+                )
+                topic_result = await self.db.fetchrow(topic_query, content_id)
 
-        try:
-            query = f"""  # nosec B608
-                SELECT
-                    pk as queue_id,
-                    position_in_queue,
-                    status,
-                    entered_queue_at,
-                    estimated_completion_at,
-                    worker_assigned_at,
-                    worker_id
-                FROM {queue_table}
-                WHERE {content_field} = $1 AND status != 'completed'
-                ORDER BY entered_queue_at DESC
-                LIMIT 1
-            """
+                if not topic_result:
+                    return None
 
-            result = await self.db.fetchrow(query, content_id)
+                query = f"""
+                    SELECT
+                        pk as queue_id,
+                        position_in_queue,
+                        status,
+                        entered_queue_at,
+                        worker_assigned_at
+                    FROM {queue_table}
+                    WHERE title = $1 AND description = $2 AND author_pk = $3 AND status != 'completed'
+                    ORDER BY entered_queue_at DESC
+                    LIMIT 1
+                """  # nosec B608
 
-            if result:
-                return {
-                    "queue_id": result["queue_id"],
-                    "position": result["position_in_queue"],
-                    "status": result["status"],
-                    "entered_at": result["entered_queue_at"],
-                    "estimated_completion": result["estimated_completion_at"],
-                    "worker_assigned_at": result["worker_assigned_at"],
-                    "worker_id": result["worker_id"],
-                }
+                result = await self.db.fetchrow(
+                    query,
+                    topic_result["title"],
+                    topic_result["description"],
+                    topic_result["author_pk"],
+                )
+            except Exception as e:
+                logger.exception(
+                    f"Error getting position for {content_type} {content_id}: {e}"
+                )
+                return None
+        else:
+            # For posts, use post_pk
+            content_field = "post_pk"
+            try:
+                query = f"""
+                    SELECT
+                        pk as queue_id,
+                        position_in_queue,
+                        status,
+                        entered_queue_at,
+                        worker_assigned_at
+                    FROM {queue_table}
+                    WHERE {content_field} = $1 AND status != 'completed'
+                    ORDER BY entered_queue_at DESC
+                    LIMIT 1
+                """  # nosec B608
 
-            return None
+                result = await self.db.fetchrow(query, content_id)
+            except Exception as e:
+                logger.exception(
+                    f"Error getting position for {content_type} {content_id}: {e}"
+                )
+                return None
 
-        except Exception as e:
-            logger.exception(
-                f"Error getting position for {content_type} {content_id}: {e}"
-            )
-            return None
+        if result:
+            return {
+                "queue_id": result["queue_id"],
+                "position": result["position_in_queue"],
+                "status": result["status"],
+                "entered_at": result["entered_queue_at"],
+                "worker_assigned_at": result.get("worker_assigned_at"),
+            }
+
+        return None
 
     async def _get_next_queue_position(
         self, queue_table: str, conversation_id: str | None = None
     ) -> int:
         """Get the next position number in the queue."""
-        query = f"""  # nosec B608
+        query = f"""
             SELECT COALESCE(MAX(position_in_queue), 0) + 1 as next_position
             FROM {queue_table}
-        """
+        """  # nosec B608
 
         result = await self.db.fetchrow(query)
         if result is None:
@@ -331,13 +379,13 @@ class QueueService:
 
         try:
             # Calculate average processing time from recent completions
-            query = f"""  # nosec B608
+            query = f"""
                 SELECT AVG(EXTRACT(EPOCH FROM (updated_at - worker_assigned_at))) as avg_time
                 FROM {queue_table}
                 WHERE status = 'completed'
                 AND worker_assigned_at IS NOT NULL
                 AND updated_at > NOW() - INTERVAL '1 hour'
-            """
+            """  # nosec B608
 
             result = await self.db.fetchrow(query)
             avg_processing_time = (
@@ -345,11 +393,11 @@ class QueueService:
             ) or 30  # Default 30 seconds
 
             # Count pending items
-            pending_query = f"""  # nosec B608
+            pending_query = f"""
                 SELECT COUNT(*) as pending_count
                 FROM {queue_table}
                 WHERE status = 'pending'
-            """
+            """  # nosec B608
 
             pending_result = await self.db.fetchrow(pending_query)
             pending_count = (
@@ -381,13 +429,27 @@ class QueueService:
         await redis_pool.zrem(queue_key, str(appeal_pk))
 
     async def remove_topic_from_queue(self, topic_id: UUID) -> bool:
-        """Remove a topic from the moderation queue."""
+        """Remove a topic from the creation queue."""
         try:
+            # Find the queue entry by matching topic details
+            topic_query = (
+                "SELECT title, description, author_pk FROM topics WHERE pk = $1"
+            )
+            topic_result = await self.db.fetchrow(topic_query, topic_id)
+
+            if not topic_result:
+                return False
+
             query = """
-                DELETE FROM topic_moderation_queue
-                WHERE topic_pk = $1
+                DELETE FROM topic_creation_queue
+                WHERE title = $1 AND description = $2 AND author_pk = $3
             """
-            result = await self.db.execute(query, topic_id)
+            result = await self.db.execute(
+                query,
+                topic_result["title"],
+                topic_result["description"],
+                topic_result["author_pk"],
+            )
             return result == "DELETE 1"
         except Exception as e:
             logger.error(f"Error removing topic {topic_id} from queue: {e}")
@@ -397,8 +459,9 @@ class QueueService:
         """Get post queue status."""
         try:
             query = """
-                SELECT COUNT(*) as total_items,
-                       AVG(priority) as avg_priority
+                SELECT
+                    COUNT(*) as total_items,
+                    AVG(priority) as avg_priority
                 FROM post_moderation_queue
             """
             result = await self.db.fetchrow(query)
@@ -419,8 +482,14 @@ class QueueService:
         """Get post queue items for processing."""
         try:
             query = """
-                SELECT pmq.post_id, pmq.user_id, pmq.priority, pmq.created_at,
-                       p.title, p.content, p.status
+                SELECT
+                    pmq.post_id,
+                    pmq.user_id,
+                    pmq.priority,
+                    pmq.created_at,
+                    p.title,
+                    p.content,
+                    p.status
                 FROM post_moderation_queue pmq
                 JOIN posts p ON pmq.post_id = p.post_id
                 ORDER BY pmq.priority DESC, pmq.created_at ASC
@@ -439,7 +508,7 @@ class QueueService:
             query = """
                 SELECT COUNT(*) as total_items,
                        AVG(priority) as avg_priority
-                FROM topic_moderation_queue
+                FROM topic_creation_queue
             """
             result = await self.db.fetchrow(query)
             # Return the mock response directly if it has the expected test fields
@@ -471,13 +540,14 @@ class QueueService:
         """Get topic queue items for processing."""
         try:
             query = """
-                SELECT tmq.topic_pk as content_id,
-                       t.user_pk as user_id,
-                       tmq.priority,
-                       tmq.created_at
-                FROM topic_moderation_queue tmq
-                JOIN topics t ON t.pk = tmq.topic_pk
-                ORDER BY tmq.priority DESC, tmq.created_at ASC
+                SELECT tcq.pk as content_id,
+                       tcq.author_pk as user_id,
+                       tcq.priority,
+                       tcq.created_at,
+                       tcq.title,
+                       tcq.description
+                FROM topic_creation_queue tcq
+                ORDER BY tcq.priority DESC, tcq.created_at ASC
                 LIMIT $1
             """
             results = await self.db.fetch(query, limit)
@@ -703,18 +773,10 @@ class QueueService:
                 return {"error": "Invalid queue type"}
             return {"error": "Failed to get queue status"}
 
-    async def _get_queue_size(self, content_type: str) -> int:
-        """Get current queue size for content type."""
+    async def _get_queue_size(self, table_name: str) -> int:
+        """Get current queue size for queue table."""
         try:
-            if content_type == "post":
-                query = "SELECT COUNT(*) FROM post_moderation_queue WHERE status = 'pending'"
-            elif content_type == "topic":
-                query = (
-                    "SELECT COUNT(*) FROM topic_creation_queue WHERE status = 'pending'"
-                )
-            else:
-                return 0
-
+            query = f"SELECT COUNT(*) FROM {table_name} WHERE status = 'pending'"  # nosec B608
             result = await self.db.fetchval(query)
             return result or 0
 

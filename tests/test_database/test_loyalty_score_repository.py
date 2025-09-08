@@ -496,7 +496,9 @@ class TestLoyaltyScoreRepository:
         )
         mock_get_db_connection.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        mock_conn.fetchrow.side_effect = [None, None]
+        # Mock all the queries that get_system_stats makes
+        mock_conn.fetchrow.side_effect = [None, None, None]  # stats, fallback, events
+        mock_conn.fetch.return_value = []  # distribution query
 
         with pytest.raises(ValueError, match="Failed to retrieve system statistics"):
             await repository.get_system_stats()

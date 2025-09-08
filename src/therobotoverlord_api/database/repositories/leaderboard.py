@@ -286,8 +286,7 @@ class LeaderboardRepository(BaseRepository):
                 COUNT(*) as total_users,
                 AVG(loyalty_score) as avg_score,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY loyalty_score) as median_score,
-                MIN(CASE WHEN percentile_rank <= 0.1 THEN loyalty_score END) as top_10_threshold,
-                calculated_at as last_updated
+                MIN(CASE WHEN percentile_rank <= 0.1 THEN loyalty_score END) as top_10_threshold
             FROM leaderboard_rankings
         """
 
@@ -327,7 +326,6 @@ class LeaderboardRepository(BaseRepository):
                 median_loyalty_score=int(stats_row["median_score"] or 0),
                 top_10_percent_threshold=int(stats_row["top_10_threshold"] or 0),
                 score_distribution=score_distribution,
-                last_updated=stats_row["last_updated"],
             )
 
     async def get_user_rank_history(

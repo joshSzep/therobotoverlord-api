@@ -236,7 +236,6 @@ class TestAppealService:
 
         mock_appeal_repo = AsyncMock()
         mock_loyalty_service = AsyncMock()
-        mock_queue_service = AsyncMock()
 
         appeal_service.appeal_repository.get = AsyncMock(return_value=mock_appeal)
         appeal_service.appeal_repository.update_appeal = mock_appeal_repo.update_appeal
@@ -275,7 +274,6 @@ class TestAppealService:
 
         mock_appeal_repo = AsyncMock()
         mock_loyalty_service = AsyncMock()
-        mock_queue_service = AsyncMock()
 
         appeal_service.appeal_repository.get = AsyncMock(return_value=mock_appeal)
         appeal_service.appeal_repository.update_appeal = mock_appeal_repo.update_appeal

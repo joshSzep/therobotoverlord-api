@@ -111,6 +111,7 @@ class TestQueueServiceSimple:
             str(expected_queue_id),
             str(message_id),
             _job_id=f"message_{message_id}",
+            _queue_name="private_message_moderation",
         )
 
     @pytest.mark.asyncio

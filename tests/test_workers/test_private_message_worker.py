@@ -52,14 +52,25 @@ class TestPrivateMessageModerationWorker:
         """Test successful worker startup."""
         worker = PrivateMessageModerationWorker()
 
-        ctx = {}
-        await worker.startup(ctx)
+        # Mock the database connection factory
+        class MockDBConnection:
+            async def __aenter__(self):
+                return mock_connection
 
-        # Verify the connection factory is stored in context
-        assert "get_db_connection" in ctx
-        assert callable(ctx["get_db_connection"])
-        # Worker no longer stores db connection directly during startup
-        assert worker.db is None
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        with (
+            patch("therobotoverlord_api.workers.base.init_database") as mock_init_db,
+            patch("therobotoverlord_api.workers.base.get_db_connection") as mock_get_db,
+        ):
+            mock_init_db.return_value = None
+            mock_get_db.return_value = MockDBConnection()
+            ctx = {}
+            await worker.startup(ctx)
+            assert "get_db_connection" in ctx
+            assert callable(ctx["get_db_connection"])
+            assert worker.db is None
 
     @pytest.mark.asyncio
     async def test_process_message_moderation_success(

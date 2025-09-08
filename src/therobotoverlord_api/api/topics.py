@@ -194,15 +194,42 @@ async def create_topic(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Topic:
     """Create a new topic (requires authentication)."""
-    # Check if user can create topics using loyalty service
+    # Check if user can create topics using percentile-based logic
     if current_user.role == UserRole.CITIZEN:
         loyalty_service = await get_loyalty_score_service()
-        thresholds = await loyalty_service.get_score_thresholds()
-        if current_user.loyalty_score < thresholds["topic_creation"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient loyalty score to create topics. Required: {thresholds['topic_creation']}, Your score: {current_user.loyalty_score}",
-            )
+
+        try:
+            # Get leaderboard stats to calculate percentiles
+            stats = await loyalty_service.get_leaderboard_stats()
+            user_rank = await loyalty_service.get_user_rank(current_user.pk)
+
+            if stats and user_rank and stats.total_users > 0:
+                # Calculate user's percentile
+                total_users = stats.total_users
+                user_position = user_rank.rank
+                user_percentile = user_position / total_users
+                required_percentile = 0.1  # Top 10%
+
+                # Check if user is in top 10%
+                if user_percentile > required_percentile:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Must be in top {int(required_percentile * 100)}% of citizens by loyalty score to create topics",
+                    )
+            else:
+                # Fallback to allow creation when leaderboard data is unavailable
+                pass
+
+        except HTTPException:
+            # Re-raise HTTPException to properly handle authorization failures
+            raise
+        except Exception as e:
+            # Fallback to allow creation if there's any error getting leaderboard data
+            # Log the exception but don't fail the request
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to check topic creation eligibility: {e}")
 
     # Set the author
     topic_data.author_pk = current_user.pk

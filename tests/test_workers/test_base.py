@@ -26,30 +26,33 @@ class TestBaseWorker:
         """Test successful worker startup."""
         worker = BaseWorker()
 
-        with patch(
-            "therobotoverlord_api.workers.base.get_db_connection",
-            new_callable=AsyncMock,
-            return_value=mock_connection,
+        # Mock the database connection factory
+        class MockDBConnection:
+            async def __aenter__(self):
+                return mock_connection
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+        with (
+            patch("therobotoverlord_api.workers.base.init_database") as mock_init_db,
+            patch("therobotoverlord_api.workers.base.get_db_connection") as mock_get_db,
         ):
+            mock_init_db.return_value = None
+            mock_get_db.return_value = MockDBConnection()
             ctx = {}
             await worker.startup(ctx)
-
             assert "get_db_connection" in ctx
-            # Worker no longer stores db connection directly
 
     @pytest.mark.asyncio
-    async def test_startup_failure(self):
-        """Test worker startup failure."""
+    async def test_startup_failure(self, mock_connection):
+        """Test worker startup with database connection failure."""
         worker = BaseWorker()
-
-        # Startup doesn't fail anymore since it just stores the connection factory
-        # The actual connection happens per-request
-        ctx = {}
-        await worker.startup(ctx)
-
-        # Verify the connection factory is stored
-        assert "get_db_connection" in ctx
-        assert callable(ctx["get_db_connection"])
+        with patch("therobotoverlord_api.workers.base.init_database") as mock_init_db:
+            mock_init_db.side_effect = Exception("Database connection failed")
+            ctx = {}
+            with pytest.raises(Exception, match="Database connection failed"):
+                await worker.startup(ctx)
 
     @pytest.mark.asyncio
     async def test_shutdown_success(self, mock_connection):

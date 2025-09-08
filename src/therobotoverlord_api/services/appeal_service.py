@@ -377,7 +377,6 @@ class AppealService:
             user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="sustained",
-            points_awarded=50,  # Configurable
         )
 
         logger.info(f"Content restoration for appeal {appeal.pk} not yet implemented")
@@ -400,7 +399,6 @@ class AppealService:
             user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="sustained",
-            points_awarded=50,
         )
 
         # 2. Restore content with edits (NEW)
@@ -466,7 +464,6 @@ class AppealService:
             user_pk=appeal.user_pk,
             appeal_pk=appeal.pk,
             outcome="denied",
-            points_awarded=-5,  # Small penalty
         )
 
         # Apply sanctions for repeated denied appeals
@@ -550,7 +547,6 @@ class AppealService:
                     user_pk=appeal.user_pk,
                     appeal_pk=appeal.pk,
                     outcome="frivolous_appeal_penalty",
-                    points_awarded=-25,
                 )
                 logger.info(
                     f"Applied frivolous appeal penalty to user {appeal.user_pk}"

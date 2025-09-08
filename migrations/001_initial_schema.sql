@@ -119,8 +119,12 @@ CREATE TABLE topic_creation_queue (
     description TEXT NOT NULL,
     author_pk UUID NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
     priority INTEGER DEFAULT 1,
+    position_in_queue INTEGER NOT NULL,
+    status VARCHAR(50) DEFAULT 'pending',
     assigned_to UUID REFERENCES users(pk),
     assigned_at TIMESTAMP WITH TIME ZONE,
+    worker_assigned_at TIMESTAMP WITH TIME ZONE,
+    entered_queue_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -306,15 +310,30 @@ CREATE TABLE loyalty_score_adjustments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Loyalty score events table (separate from moderation_events)
+CREATE TABLE loyalty_score_events (
+    pk UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_pk UUID NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    content_type VARCHAR(20) NOT NULL CHECK (content_type IN ('post', 'topic', 'private_message', 'appeal')),
+    content_pk UUID NOT NULL,
+    outcome VARCHAR(50) NOT NULL CHECK (outcome IN ('approved', 'rejected', 'removed', 'appeal_sustained', 'appeal_denied')),
+    score_delta INTEGER NOT NULL,
+    previous_score INTEGER NOT NULL,
+    new_score INTEGER NOT NULL,
+    moderator_pk UUID REFERENCES users(pk),
+    reason TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Loyalty score history table
 CREATE TABLE loyalty_score_history (
     pk UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_pk UUID NOT NULL REFERENCES users(pk) ON DELETE CASCADE,
-    old_score INTEGER NOT NULL,
-    new_score INTEGER NOT NULL,
-    change_reason TEXT,
-    adjustment_pk UUID REFERENCES loyalty_score_adjustments(pk),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    score INTEGER NOT NULL,
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    event_pk UUID REFERENCES loyalty_score_events(pk)
 );
 
 -- Loyalty score breakdown cache table
@@ -502,8 +521,7 @@ SELECT
         WHEN u.loyalty_score >= 100 THEN true
         ELSE false
     END as topic_creation_enabled,
-    u.created_at as user_created_at,
-    NOW() as calculated_at
+    u.created_at as user_created_at
 FROM users u
 LEFT JOIN posts p ON u.pk = p.author_pk AND p.status = 'approved'
 LEFT JOIN topics t ON u.pk = t.author_pk AND t.status = 'approved'
@@ -598,8 +616,14 @@ CREATE INDEX idx_loyalty_adjustments_user ON loyalty_score_adjustments(user_pk);
 CREATE INDEX idx_loyalty_adjustments_type ON loyalty_score_adjustments(adjustment_type);
 CREATE INDEX idx_loyalty_adjustments_created_at ON loyalty_score_adjustments(created_at DESC);
 
+CREATE INDEX idx_loyalty_score_events_user ON loyalty_score_events(user_pk);
+CREATE INDEX idx_loyalty_score_events_type ON loyalty_score_events(event_type);
+CREATE INDEX idx_loyalty_score_events_content ON loyalty_score_events(content_type, content_pk);
+CREATE INDEX idx_loyalty_score_events_outcome ON loyalty_score_events(outcome);
+CREATE INDEX idx_loyalty_score_events_created_at ON loyalty_score_events(created_at DESC);
+
 CREATE INDEX idx_loyalty_history_user ON loyalty_score_history(user_pk);
-CREATE INDEX idx_loyalty_history_created_at ON loyalty_score_history(created_at DESC);
+CREATE INDEX idx_loyalty_history_recorded_at ON loyalty_score_history(recorded_at DESC);
 
 CREATE INDEX idx_content_versions_content ON content_versions(content_pk);
 CREATE INDEX idx_content_versions_appeal ON content_versions(appeal_pk);
@@ -659,6 +683,7 @@ CREATE INDEX idx_admin_actions_metadata_gin ON admin_actions USING GIN(metadata)
 CREATE INDEX idx_dashboard_snapshots_data_gin ON dashboard_snapshots USING GIN(data);
 CREATE INDEX idx_appeals_restoration_metadata_gin ON appeals USING GIN(restoration_metadata);
 CREATE INDEX idx_appeal_history_metadata_gin ON appeal_history USING GIN(metadata);
+CREATE INDEX idx_loyalty_score_events_metadata_gin ON loyalty_score_events USING GIN(metadata);
 
 -- Create text search indexes
 CREATE INDEX idx_posts_content_search ON posts USING GIN(to_tsvector('english', content));

@@ -129,7 +129,7 @@ class LeaderboardStats(BaseModel):
     median_loyalty_score: int
     top_10_percent_threshold: int
     score_distribution: dict[str, int]  # Score ranges and counts
-    last_updated: datetime
+    last_updated: datetime = Field(default_factory=datetime.now)
 
 
 class UserRankLookup(BaseModel):

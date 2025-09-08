@@ -11,6 +11,7 @@ from therobotoverlord_api.database.models.leaderboard import LeaderboardResponse
 from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
 from therobotoverlord_api.database.models.leaderboard import PaginationInfo
 from therobotoverlord_api.database.models.leaderboard import PersonalLeaderboardStats
+from therobotoverlord_api.database.models.leaderboard import UserRankLookup
 from therobotoverlord_api.database.repositories.leaderboard import LeaderboardRepository
 from therobotoverlord_api.workers.redis_connection import get_redis_client
 
@@ -299,6 +300,10 @@ class LeaderboardService:
             keys = await redis_client.keys(pattern)
             if keys:
                 await redis_client.delete(*keys)
+
+    async def get_user_rank(self, user_pk: UUID) -> UserRankLookup:
+        """Get user's rank information."""
+        return await self.repository.get_user_rank(user_pk)
 
     async def invalidate_all_cache(self):
         """Invalidate all leaderboard caches."""

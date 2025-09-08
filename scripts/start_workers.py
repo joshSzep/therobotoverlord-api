@@ -29,6 +29,8 @@ from therobotoverlord_api.workers.analytics_worker import generate_weekly_snapsh
 from therobotoverlord_api.workers.appeal_worker import process_appeal_review
 from therobotoverlord_api.workers.health_monitor import check_worker_health
 from therobotoverlord_api.workers.health_monitor import cleanup_failed_jobs
+from therobotoverlord_api.workers.leaderboard_worker import cleanup_leaderboard_cache
+from therobotoverlord_api.workers.leaderboard_worker import refresh_leaderboard_rankings
 from therobotoverlord_api.workers.post_worker import process_post_moderation
 from therobotoverlord_api.workers.private_message_worker import (
     process_private_message_moderation,
@@ -119,6 +121,16 @@ class WorkerManager:
                     "queue_name": "health_monitor",
                     "max_jobs": 1,
                     "job_timeout": 60,
+                },
+                {
+                    "name": "leaderboard_worker",
+                    "functions": [
+                        refresh_leaderboard_rankings,
+                        cleanup_leaderboard_cache,
+                    ],
+                    "queue_name": "leaderboard",
+                    "max_jobs": 1,
+                    "job_timeout": 300,
                 },
             ]
 

@@ -48,12 +48,17 @@ class TestQueueService:
         topic_id = uuid4()
         priority = 3
         expected_queue_id = uuid4()
+        author_pk = uuid4()
 
-        # Mock database responses
+        # Mock database responses in the correct order
         mock_db_connection.fetchrow.side_effect = [
+            {
+                "title": "Test Topic",
+                "description": "Test Description",
+                "author_pk": author_pk,
+            },  # Topic lookup
             {"next_position": 1},  # _get_next_queue_position
             {"pk": expected_queue_id},  # INSERT query
-            {"created_by_pk": uuid4()},  # User lookup for WebSocket broadcasting
         ]
         mock_db_connection.fetchval.return_value = (
             5  # Queue size for WebSocket broadcasting
@@ -168,18 +173,23 @@ class TestQueueService:
         """Test getting content queue position successfully."""
         content_type = "topics"
         content_id = uuid4()
+        author_pk = uuid4()
 
-        mock_response = {
-            "queue_id": uuid4(),
-            "position_in_queue": 3,
-            "status": "pending",
-            "entered_queue_at": datetime.now(UTC),
-            "estimated_completion_at": None,
-            "worker_assigned_at": None,
-            "worker_id": None,
-        }
-
-        mock_db_connection.fetchrow.return_value = mock_response
+        # Mock database responses in the correct order for topics
+        mock_db_connection.fetchrow.side_effect = [
+            {
+                "title": "Test Topic",
+                "description": "Test Description",
+                "author_pk": author_pk,
+            },  # Topic lookup
+            {
+                "queue_id": uuid4(),
+                "position_in_queue": 3,
+                "status": "pending",
+                "entered_queue_at": datetime.now(UTC),
+                "worker_assigned_at": None,
+            },  # Queue position lookup
+        ]
 
         result = await queue_service.get_content_position(content_type, content_id)
 

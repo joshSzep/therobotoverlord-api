@@ -233,10 +233,19 @@ class TestCreateTopic:
 
         # Mock loyalty service
         mock_loyalty_service_instance = AsyncMock()
-        mock_loyalty_service_instance.get_score_thresholds.return_value = {
-            "topic_creation": 50
-        }
-        mock_loyalty_service_instance.record_moderation_event.return_value = AsyncMock()
+
+        # Create proper mock objects with required attributes
+        from unittest.mock import MagicMock
+
+        mock_stats = MagicMock()
+        mock_stats.total_users = 100
+
+        mock_rank = MagicMock()
+        mock_rank.rank = 5  # Top 5% user
+
+        mock_loyalty_service_instance.get_leaderboard_stats.return_value = mock_stats
+        mock_loyalty_service_instance.get_user_rank.return_value = mock_rank
+        mock_loyalty_service_instance.record_moderation_event.return_value = None
         mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         # Mock queue service
@@ -258,16 +267,25 @@ class TestCreateTopic:
         data = response.json()
         assert data["title"] == sample_topic.title
         mock_topic_repo.create.assert_called_once()
-        # Loyalty service should be called instead of UserRepository.can_create_topic
-        mock_loyalty_service_instance.get_score_thresholds.assert_called_once()
+        # Loyalty service should be called for leaderboard stats and user rank
+        mock_loyalty_service_instance.get_leaderboard_stats.assert_called_once()
+        mock_loyalty_service_instance.get_user_rank.assert_called_once_with(
+            mock_user.pk
+        )
 
         # Clean up
         client.app.dependency_overrides.clear()
 
+    @patch("therobotoverlord_api.api.topics.TopicRepository")
     @patch("therobotoverlord_api.api.topics.get_loyalty_score_service")
     @patch("therobotoverlord_api.database.repositories.user.UserRepository")
     def test_create_topic_insufficient_loyalty(
-        self, mock_user_repo_class, mock_loyalty_service, client, mock_user
+        self,
+        mock_user_repo_class,
+        mock_loyalty_service,
+        mock_topic_repo_class,
+        client,
+        mock_user,
     ):
         """Test topic creation with insufficient loyalty score."""
         mock_user.loyalty_score = 5  # Below threshold
@@ -277,11 +295,24 @@ class TestCreateTopic:
         mock_user_repo.get_top_percent_loyalty_threshold.return_value = 75
         mock_user_repo_class.return_value = mock_user_repo
 
+        # Mock topic repository (should not be called)
+        mock_topic_repo = AsyncMock()
+        mock_topic_repo_class.return_value = mock_topic_repo
+
         # Mock loyalty service
         mock_loyalty_service_instance = AsyncMock()
-        mock_loyalty_service_instance.get_score_thresholds.return_value = {
-            "topic_creation": 50
-        }
+
+        # Create proper mock objects with required attributes
+        from unittest.mock import MagicMock
+
+        mock_stats = MagicMock()
+        mock_stats.total_users = 100
+
+        mock_rank = MagicMock()
+        mock_rank.rank = 50  # Bottom 50% user, should fail (50/100 = 0.5 > 0.1)
+
+        mock_loyalty_service_instance.get_leaderboard_stats.return_value = mock_stats
+        mock_loyalty_service_instance.get_user_rank.return_value = mock_rank
         mock_loyalty_service.return_value = mock_loyalty_service_instance
 
         topic_data = {
@@ -296,9 +327,10 @@ class TestCreateTopic:
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
         response_detail = response.json()["detail"]
-        assert "Insufficient loyalty score" in response_detail
-        assert "Required: 50" in response_detail
-        assert "Your score: 5" in response_detail
+        assert "Must be in top 10% of citizens" in response_detail
+
+        # Verify topic creation was not attempted
+        mock_topic_repo.create.assert_not_called()
 
         # Clean up
         client.app.dependency_overrides.clear()

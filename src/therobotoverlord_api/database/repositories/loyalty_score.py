@@ -1,5 +1,7 @@
 """Loyalty Score repository for The Robot Overlord API."""
 
+import json
+
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -87,13 +89,25 @@ class LoyaltyScoreRepository(BaseRepository):
                     user_pk,
                 )
 
-                # Insert moderation event
+                # Insert loyalty score event
                 await conn.execute(
                     """
-                    INSERT INTO moderation_events
-                    (pk, user_pk, event_type, content_type, content_pk, outcome,
-                     score_delta, previous_score, new_score, moderator_pk, reason,
-                     metadata, created_at)
+                    INSERT INTO loyalty_score_events
+                    (
+                        pk,
+                        user_pk,
+                        event_type,
+                        content_type,
+                        content_pk,
+                        outcome,
+                        score_delta,
+                        previous_score,
+                        new_score,
+                        moderator_pk,
+                        reason,
+                        metadata,
+                        created_at
+                    )
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                     """,
                     event_pk,
@@ -107,7 +121,7 @@ class LoyaltyScoreRepository(BaseRepository):
                     new_score,
                     moderator_pk,
                     reason,
-                    metadata,
+                    json.dumps(metadata) if metadata else json.dumps({}),
                     now,
                 )
 
@@ -217,7 +231,7 @@ class LoyaltyScoreRepository(BaseRepository):
             COUNT(CASE WHEN me.content_type = 'private_message' AND me.outcome = 'rejected' THEN 1 END) as total_rejected_messages,
             u.updated_at as last_updated
         FROM users u
-        LEFT JOIN moderation_events me ON u.pk = me.user_pk
+        LEFT JOIN loyalty_score_events me ON u.pk = me.user_pk
         WHERE u.pk = $1
         GROUP BY u.pk, u.loyalty_score, u.updated_at
         """
@@ -289,14 +303,14 @@ class LoyaltyScoreRepository(BaseRepository):
         # Count query
         count_query = f"""
         SELECT COUNT(*)
-        FROM moderation_events
+        FROM loyalty_score_events
         WHERE {" AND ".join(where_conditions)}
         """
 
         # Data query
         data_query = f"""
         SELECT *
-        FROM moderation_events
+        FROM loyalty_score_events
         WHERE {" AND ".join(where_conditions)}
         ORDER BY created_at DESC
         LIMIT ${param_count + 1} OFFSET ${param_count + 2}
@@ -347,6 +361,7 @@ class LoyaltyScoreRepository(BaseRepository):
 
     async def get_system_stats(self) -> LoyaltyScoreStats:
         """Get system-wide loyalty score statistics."""
+        # First try with leaderboard rankings, fallback if empty
         stats_query = """
         SELECT
             COUNT(*) as total_users,
@@ -356,6 +371,17 @@ class LoyaltyScoreRepository(BaseRepository):
         FROM users u
         LEFT JOIN leaderboard_rankings lr ON u.pk = lr.user_pk
         WHERE u.is_banned = false
+        """
+
+        # Fallback query without leaderboard rankings
+        fallback_stats_query = """
+        SELECT
+            COUNT(*) as total_users,
+            AVG(loyalty_score) as average_score,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY loyalty_score) as median_score,
+            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY loyalty_score) as top_10_threshold
+        FROM users
+        WHERE is_banned = false
         """
 
         distribution_query = """
@@ -380,7 +406,21 @@ class LoyaltyScoreRepository(BaseRepository):
         """
 
         async with get_db_connection() as conn:
-            stats_row = await conn.fetchrow(stats_query)
+            stats_row = None
+            try:
+                stats_row = await conn.fetchrow(stats_query)
+                # Check if leaderboard rankings returned any useful data
+                if stats_row and stats_row["top_10_threshold"] is not None:
+                    use_fallback = False
+                else:
+                    use_fallback = True
+            except Exception:
+                use_fallback = True
+
+            # Use fallback query if leaderboard rankings are empty or failed
+            if use_fallback:
+                stats_row = await conn.fetchrow(fallback_stats_query)
+
             distribution_rows = await conn.fetch(distribution_query)
             events_row = await conn.fetchrow(events_query)
 
@@ -436,7 +476,7 @@ class LoyaltyScoreRepository(BaseRepository):
         """Recalculate a user's loyalty score from scratch."""
         query = """
         SELECT COALESCE(SUM(score_delta), 0) as total_score
-        FROM moderation_events
+        FROM loyalty_score_events
         WHERE user_pk = $1
         """
 
@@ -531,7 +571,7 @@ class LoyaltyScoreRepository(BaseRepository):
 
         query = f"""
         SELECT *
-        FROM moderation_events
+        FROM loyalty_score_events
         {where_clause}
         ORDER BY created_at DESC
         LIMIT ${param_count + 1}

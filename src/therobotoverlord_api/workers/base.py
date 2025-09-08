@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 from arq.connections import RedisSettings
 
 from therobotoverlord_api.config.redis import get_redis_settings
+from therobotoverlord_api.database.connection import close_database
 from therobotoverlord_api.database.connection import get_db_connection
+from therobotoverlord_api.database.connection import init_database
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,8 @@ class BaseWorker:
     async def startup(self, ctx: dict[str, Any]) -> None:
         """Worker startup hook."""
         logger.info(f"Starting {self.__class__.__name__}")
-        # Note: Database connection will be managed per-request
+        # Initialize database connection pool for workers
+        await init_database()
         # Store connection factory in context for workers to use
         ctx["get_db_connection"] = get_db_connection
 
@@ -48,6 +51,8 @@ class BaseWorker:
         logger.info(f"Shutting down {self.__class__.__name__}")
         if self.db is not None:
             await self.db.close()
+        # Close the global database connection pool
+        await close_database()
 
     async def update_queue_status(
         self,
@@ -99,6 +104,7 @@ class QueueWorkerMixin:
     ) -> None:
         """Update queue item status."""
         try:
+            await init_database()
             async with get_db_connection() as connection:
                 await self._update_queue_status_with_connection(
                     connection, queue_table, queue_id, status, worker_id
@@ -113,6 +119,7 @@ class QueueWorkerMixin:
     ) -> dict[str, Any] | None:
         """Get queue item by ID."""
         try:
+            await init_database()
             async with get_db_connection() as connection:
                 query = f"SELECT * FROM {queue_table} WHERE pk = $1"  # nosec B608
                 record = await connection.fetchrow(query, queue_id)
@@ -134,6 +141,7 @@ class QueueWorkerMixin:
     ) -> bool:
         """Generic queue item processing workflow with retry logic."""
         try:
+            await init_database()
             async with get_db_connection() as connection:
                 # Get current retry count
                 retry_count = await self._get_retry_count(
@@ -179,7 +187,7 @@ class QueueWorkerMixin:
                 )
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception(f"Error processing {queue_table} item {queue_id}")
             try:
                 async with get_db_connection() as connection:

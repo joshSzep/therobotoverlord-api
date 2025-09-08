@@ -118,10 +118,10 @@ async def get_top_users(
     }
 
 
-@router.get("/stats", response_model=LeaderboardStats)
+@router.get("/stats")
 async def get_leaderboard_stats(
     user: Annotated[User | None, Depends(get_optional_user)] = None,
-):
+) -> LeaderboardStats:
     """
     Get overall leaderboard statistics and metadata.
 

@@ -4,6 +4,8 @@ import json
 
 from uuid import UUID
 
+from therobotoverlord_api.database.models.leaderboard import LeaderboardStats
+from therobotoverlord_api.database.models.leaderboard import UserRankLookup
 from therobotoverlord_api.database.models.loyalty_score import ContentType
 from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventFilters
 from therobotoverlord_api.database.models.loyalty_score import LoyaltyEventOutcome
@@ -17,6 +19,7 @@ from therobotoverlord_api.database.models.loyalty_score import UserLoyaltyProfil
 from therobotoverlord_api.database.repositories.loyalty_score import (
     LoyaltyScoreRepository,
 )
+from therobotoverlord_api.services.leaderboard_service import get_leaderboard_service
 from therobotoverlord_api.workers.redis_connection import get_redis_client
 
 
@@ -119,14 +122,31 @@ class LoyaltyScoreService:
         # Get from repository
         stats = await self.repository.get_system_stats()
 
-        # Cache the result
-        await redis_client.setex(
-            cache_key,
-            self.cache_ttl["system_stats"],
-            json.dumps(stats.model_dump(), default=str),
-        )
+        # Cache the result for 5 minutes
+        try:
+            await redis_client.setex(
+                cache_key,
+                300,  # 5 minutes
+                json.dumps(stats.model_dump(), default=str),
+            )
+        except Exception as e:
+            # Don't fail if caching fails, but log for debugging
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Failed to cache system stats: {e}")
 
         return stats
+
+    async def get_leaderboard_stats(self) -> LeaderboardStats:
+        """Get leaderboard statistics."""
+        leaderboard_service = await get_leaderboard_service()
+        return await leaderboard_service.get_leaderboard_stats()
+
+    async def get_user_rank(self, user_pk: UUID) -> UserRankLookup:
+        """Get user's rank information."""
+        leaderboard_service = await get_leaderboard_service()
+        return await leaderboard_service.get_user_rank(user_pk)
 
     async def record_moderation_event(
         self,
@@ -251,22 +271,8 @@ class LoyaltyScoreService:
         user_pk: UUID,
         appeal_pk: UUID,
         outcome: str,
-        points_awarded: int,
     ) -> None:
         """Record loyalty score changes from appeal outcomes."""
-        event_data = {
-            "user_pk": user_pk,
-            "event_type": "appeal_outcome",
-            "content_type": "appeal",
-            "content_pk": appeal_pk,
-            "outcome": outcome,
-            "points_awarded": points_awarded,
-            "metadata": {
-                "appeal_pk": str(appeal_pk),
-                "outcome": outcome,
-            },
-        }
-
         await self.record_moderation_event(
             user_pk=user_pk,
             event_type=ModerationEventType.APPEAL_OUTCOME,

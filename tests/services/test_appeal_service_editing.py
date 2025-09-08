@@ -208,7 +208,6 @@ class TestAppealServiceEditing:
             user_pk=sample_appeal.user_pk,
             appeal_pk=sample_appeal.pk,
             outcome="denied",
-            points_awarded=-5,
         )
 
     @pytest.mark.asyncio
